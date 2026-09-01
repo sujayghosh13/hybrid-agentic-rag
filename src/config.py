@@ -23,6 +23,9 @@ class Settings:
     bm25_index_path: Path = Path(os.getenv("BM25_INDEX_PATH", "data/processed/bm25_index.pkl"))
     retrieval_top_k: int = int(os.getenv("RETRIEVAL_TOP_K", "10"))
     rrf_k: int = int(os.getenv("RRF_K", "60"))
+    reranker_model_name: str = os.getenv("RERANKER_MODEL_NAME", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    rerank_candidates_count: int = int(os.getenv("RERANK_CANDIDATES_COUNT", "20"))
+    rerank_top_k: int = int(os.getenv("RERANK_TOP_K", "5"))
 
     def __post_init__(self):
         if not self.qdrant_url:
