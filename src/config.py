@@ -26,6 +26,10 @@ class Settings:
     reranker_model_name: str = os.getenv("RERANKER_MODEL_NAME", "cross-encoder/ms-marco-MiniLM-L-6-v2")
     rerank_candidates_count: int = int(os.getenv("RERANK_CANDIDATES_COUNT", "20"))
     rerank_top_k: int = int(os.getenv("RERANK_TOP_K", "5"))
+    ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen3:4b")
+    agent_temperature: float = float(os.getenv("AGENT_TEMPERATURE", "0.1"))
+    agent_max_iterations: int = int(os.getenv("AGENT_MAX_ITERATIONS", "5"))
 
     def __post_init__(self):
         if not self.qdrant_url:
