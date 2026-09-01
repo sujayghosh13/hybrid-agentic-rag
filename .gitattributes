@@ -1,0 +1,2 @@
+# Exclude datasets and raw documentation from language statistics
+data/** linguist-vendored
