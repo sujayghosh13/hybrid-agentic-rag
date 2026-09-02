@@ -35,6 +35,17 @@ class Settings:
     sufficiency_check_enabled: bool = os.getenv("SUFFICIENCY_CHECK_ENABLED", "true").lower() in ("true", "1", "yes")
     crag_enabled: bool = os.getenv("CRAG_ENABLED", "true").lower() in ("true", "1", "yes")
     crag_min_rerank_score: float = float(os.getenv("CRAG_MIN_RERANK_SCORE", "-5.0"))
+    api_host: str = os.getenv("API_HOST", "0.0.0.0")
+    api_port: int = int(os.getenv("API_PORT", "8000"))
+    cors_origins: str = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:8501,http://127.0.0.1:8501,http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000",
+    )
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse comma-separated cors_origins string into a list of cleaned origin URLs."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     def __post_init__(self):
         if not self.qdrant_url:
