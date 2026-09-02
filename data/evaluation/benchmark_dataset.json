@@ -1,0 +1,330 @@
+{
+  "version": "1.0.0",
+  "corpus_documents": [
+    "docker-bridge-network.html",
+    "docker-networking.html",
+    "kubernetes-deployments.html",
+    "kubernetes-pods.html",
+    "kubernetes-workloads.html"
+  ],
+  "total_corpus_chunks": 308,
+  "queries": [
+    {
+      "id": "direct_factual_01",
+      "query": "What is the difference between user-defined bridge networks and the default bridge network in Docker?",
+      "category": "direct_factual",
+      "relevant_doc_files": ["docker-bridge-network.html"],
+      "relevant_chunk_ids": [
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_10"
+      ],
+      "expected_aspects": [
+        "automatic DNS resolution",
+        "environment variable sharing",
+        "better isolation",
+        "dynamic attachment and detachment"
+      ],
+      "ground_truth_answer": "User-defined bridge networks provide automatic DNS resolution between containers, better isolation, and allow containers to be attached or detached dynamically without stopping them, whereas the default bridge requires legacy --link flags and shares a single network.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "direct_factual_02",
+      "query": "What is the default bridge interface name and driver option in Docker?",
+      "category": "direct_factual",
+      "relevant_doc_files": ["docker-bridge-network.html"],
+      "relevant_chunk_ids": [
+        "docker-bridge-network.html_chunk_10",
+        "docker-bridge-network.html_chunk_23"
+      ],
+      "expected_aspects": [
+        "docker0",
+        "com.docker.network.bridge.name",
+        "Linux bridge interface"
+      ],
+      "ground_truth_answer": "The default Linux bridge interface created by Docker is named docker0, and the driver option to specify or configure the bridge name is com.docker.network.bridge.name.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "direct_factual_03",
+      "query": "What is the role of a ReplicaSet in a Kubernetes Deployment?",
+      "category": "direct_factual",
+      "relevant_doc_files": ["kubernetes-deployments.html"],
+      "relevant_chunk_ids": [
+        "kubernetes-deployments.html_chunk_12",
+        "kubernetes-deployments.html_chunk_13"
+      ],
+      "expected_aspects": [
+        "creates and manages replicated Pods",
+        "spec.replicas",
+        "owned by Deployment",
+        "replaces failed pods"
+      ],
+      "ground_truth_answer": "A Deployment defines and manages underlying ReplicaSets, which ensure that a specified number of identical Pod replicas (spec.replicas) are running at any given time.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "keyword_heavy_01",
+      "query": "Docker bridge com.docker.network.bridge.enable_ip_masquerade --ip-masq",
+      "category": "keyword_heavy",
+      "relevant_doc_files": ["docker-bridge-network.html"],
+      "relevant_chunk_ids": [
+        "docker-bridge-network.html_chunk_23"
+      ],
+      "expected_aspects": [
+        "IP masquerading",
+        "enable_ip_masquerade",
+        "--ip-masq flag"
+      ],
+      "ground_truth_answer": "The com.docker.network.bridge.enable_ip_masquerade option (and dockerd CLI flag --ip-masq) enables IP masquerading for the Docker bridge network.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "keyword_heavy_02",
+      "query": "Kubernetes Deployment spec.strategy.rollingUpdate.maxSurge maxUnavailable",
+      "category": "keyword_heavy",
+      "relevant_doc_files": ["kubernetes-deployments.html"],
+      "relevant_chunk_ids": [
+        "kubernetes-deployments.html_chunk_20",
+        "kubernetes-deployments.html_chunk_21"
+      ],
+      "expected_aspects": [
+        "maxSurge",
+        "maxUnavailable",
+        "RollingUpdate strategy",
+        "number of Pods"
+      ],
+      "ground_truth_answer": "In Kubernetes Deployments using RollingUpdate strategy, maxSurge specifies the maximum number of Pods that can be created above the desired replica count, and maxUnavailable specifies the maximum number of Pods unavailable during the update.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "keyword_heavy_03",
+      "query": "Docker network driver macvlan overlay host none bridge",
+      "category": "keyword_heavy",
+      "relevant_doc_files": ["docker-networking.html"],
+      "relevant_chunk_ids": [
+        "docker-networking.html_chunk_9",
+        "docker-networking.html_chunk_16"
+      ],
+      "expected_aspects": [
+        "bridge",
+        "macvlan",
+        "overlay",
+        "host",
+        "none"
+      ],
+      "ground_truth_answer": "Docker Engine provides built-in network drivers including bridge (default standalone), host (uses host network stack), overlay (multi-host/Swarm communication), macvlan (assigns MAC addresses to containers), and none (disables all networking).",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "semantic_paraphrased_01",
+      "query": "How can containers on the same physical host talk to each other without exposing ports to the outside world?",
+      "category": "semantic_paraphrased",
+      "relevant_doc_files": ["docker-bridge-network.html"],
+      "relevant_chunk_ids": [
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_10"
+      ],
+      "expected_aspects": [
+        "user-defined bridge",
+        "internal communication",
+        "expose all ports to each other",
+        "no port publishing needed"
+      ],
+      "ground_truth_answer": "Containers attached to the same user-defined bridge network can communicate directly with each other on all ports using container IP addresses or container names without needing to publish ports to the external host network.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "semantic_paraphrased_02",
+      "query": "How does Kubernetes guarantee that exactly one instance of a pod runs across every single machine in a cluster?",
+      "category": "semantic_paraphrased",
+      "relevant_doc_files": ["kubernetes-workloads.html"],
+      "relevant_chunk_ids": [
+        "kubernetes-workloads.html_chunk_10",
+        "kubernetes-workloads.html_chunk_45",
+        "kubernetes-workloads.html_chunk_46"
+      ],
+      "expected_aspects": [
+        "DaemonSet",
+        "runs a copy of a Pod on all nodes",
+        "system daemon",
+        "cluster storage or log collection"
+      ],
+      "ground_truth_answer": "Kubernetes uses a DaemonSet controller to ensure that all (or some subset of) nodes in a cluster run a single copy of a specific Pod, commonly used for storage daemons, node logging, and monitoring agents.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "semantic_paraphrased_03",
+      "query": "What mechanism allows non-disruptive rollouts of new container image versions in Kubernetes?",
+      "category": "semantic_paraphrased",
+      "relevant_doc_files": ["kubernetes-deployments.html"],
+      "relevant_chunk_ids": [
+        "kubernetes-deployments.html_chunk_12",
+        "kubernetes-deployments.html_chunk_13",
+        "kubernetes-deployments.html_chunk_20"
+      ],
+      "expected_aspects": [
+        "Deployment",
+        "RollingUpdate",
+        "scaling up new ReplicaSet",
+        "scaling down old ReplicaSet"
+      ],
+      "ground_truth_answer": "Kubernetes Deployments implement rolling updates (RollingUpdate strategy) by incrementally creating a new ReplicaSet, waiting for new Pods to become ready, and gradually scaling down the old ReplicaSet to avoid downtime.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "multi_concept_01",
+      "query": "How do user-defined bridge networks handle DNS resolution compared to legacy links on the default bridge?",
+      "category": "multi_concept",
+      "relevant_doc_files": ["docker-bridge-network.html"],
+      "relevant_chunk_ids": [
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_10",
+        "docker-bridge-network.html_chunk_11"
+      ],
+      "expected_aspects": [
+        "automatic DNS resolution by container name",
+        "default bridge requires --link",
+        "user-defined bridge does not require legacy links"
+      ],
+      "ground_truth_answer": "User-defined bridge networks provide automatic internal DNS resolution so containers can discover each other by container name or alias, whereas the default bridge network requires the legacy --link flag and environment variable sharing to resolve names.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "multi_concept_02",
+      "query": "What are the primary differences between Kubernetes StatefulSets and stateless Deployments regarding storage and network identity?",
+      "category": "multi_concept",
+      "relevant_doc_files": ["kubernetes-workloads.html"],
+      "relevant_chunk_ids": [
+        "kubernetes-workloads.html_chunk_37",
+        "kubernetes-workloads.html_chunk_45",
+        "kubernetes-workloads.html_chunk_46"
+      ],
+      "expected_aspects": [
+        "StatefulSet matches each Pod with PersistentVolume",
+        "unique persistent identifier",
+        "Deployments manage interchangeable stateless replicas"
+      ],
+      "ground_truth_answer": "StatefulSets maintain a unique persistent identity and dedicated PersistentVolume for each Pod replica across rescheduling, whereas Deployments manage interchangeable stateless Pods with ephemeral identities and shared or stateless storage.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "multi_concept_03",
+      "query": "When should you use a Macvlan or Overlay network driver instead of a standard Bridge network in Docker?",
+      "category": "multi_concept",
+      "relevant_doc_files": ["docker-networking.html"],
+      "relevant_chunk_ids": [
+        "docker-networking.html_chunk_9",
+        "docker-networking.html_chunk_16"
+      ],
+      "expected_aspects": [
+        "bridge is for single host",
+        "overlay is for multi-host and Swarm services",
+        "macvlan assigns physical MAC addresses directly to network"
+      ],
+      "ground_truth_answer": "Use the Bridge driver for containers communicating on a single Docker host, the Overlay driver for multi-host networking across multiple Docker daemons or Swarm services, and Macvlan when containers need to appear as physical devices on the network with dedicated MAC addresses.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 1
+    },
+    {
+      "id": "multi_chunk_01",
+      "query": "How does a Kubernetes Deployment orchestrate Pod lifecycle and container restarts via its template specification?",
+      "category": "multi_chunk",
+      "relevant_doc_files": ["kubernetes-deployments.html", "kubernetes-pods.html"],
+      "relevant_chunk_ids": [
+        "kubernetes-deployments.html_chunk_13",
+        "kubernetes-pods.html_chunk_16"
+      ],
+      "expected_aspects": [
+        "Deployment defines pod template spec",
+        "Pod controller creates pods",
+        "spec.template defines container image and restart policy"
+      ],
+      "ground_truth_answer": "A Deployment defines a .spec.template that describes the container specifications and restart policy, creating ReplicaSets which in turn create Pods whose lifecycle and restart behaviors are managed by the kubelet based on the pod specification.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 2
+    },
+    {
+      "id": "multi_chunk_02",
+      "query": "How are batch Jobs and CronJobs distinguished from continuously running daemon workloads in Kubernetes Workload Management?",
+      "category": "multi_chunk",
+      "relevant_doc_files": ["kubernetes-workloads.html"],
+      "relevant_chunk_ids": [
+        "kubernetes-workloads.html_chunk_10",
+        "kubernetes-workloads.html_chunk_45",
+        "kubernetes-workloads.html_chunk_47"
+      ],
+      "expected_aspects": [
+        "Jobs run to completion",
+        "CronJobs run on a schedule",
+        "DaemonSets and Deployments run continuously"
+      ],
+      "ground_truth_answer": "Jobs define tasks that run to completion and stop once their pods finish successfully, CronJobs schedule recurring Jobs, whereas Deployments and DaemonSets manage continuously running background services and daemons that are restarted if terminated.",
+      "expected_refusal": false,
+      "min_relevant_chunks": 2
+    },
+    {
+      "id": "multi_chunk_03",
+      "query": "What options exist for binding container ports and configuring iptables rules on Docker host networks and bridge networks?",
+      "category": "multi_chunk",
+      "relevant_doc_files": ["docker-bridge-network.html", "docker-networking.html"],
+      "relevant_chunk_ids": [
+        "docker-bridge-network.html_chunk_10",
+        "docker-bridge-network.html_chunk_23",
+        "docker-networking.html_chunk_18"
+      ],
+      "expected_aspects": [
+        "-p or --publish flag",
+        "host_binding_ipv4",
+        "iptables NAT rules",
+        "host driver uses host network directly without NAT"
+      ],
+      "ground_truth_answer": "Bridge networks require port publishing (-p / --publish) and use iptables NAT rules (configured via options like host_binding_ipv4 and enable_ip_masquerade), while the host network driver binds containers directly to host interfaces without network address translation (NAT).",
+      "expected_refusal": false,
+      "min_relevant_chunks": 2
+    },
+    {
+      "id": "negative_ood_01",
+      "query": "How does AWS Lambda provisioned concurrency reduce cold start latency in serverless Python functions?",
+      "category": "negative_ood",
+      "relevant_doc_files": [],
+      "relevant_chunk_ids": [],
+      "expected_aspects": [],
+      "ground_truth_answer": "Based on the available local technical documentation, there is insufficient evidence to answer this question.",
+      "expected_refusal": true,
+      "min_relevant_chunks": 0
+    },
+    {
+      "id": "negative_ood_02",
+      "query": "How does Terraform state locking work with DynamoDB and Amazon S3 remote backends?",
+      "category": "negative_ood",
+      "relevant_doc_files": [],
+      "relevant_chunk_ids": [],
+      "expected_aspects": [],
+      "ground_truth_answer": "Based on the available local technical documentation, there is insufficient evidence to answer this question.",
+      "expected_refusal": true,
+      "min_relevant_chunks": 0
+    },
+    {
+      "id": "negative_ood_03",
+      "query": "What are the configuration parameters for Kafka consumer group rebalance protocol in Apache Kafka 3.x?",
+      "category": "negative_ood",
+      "relevant_doc_files": [],
+      "relevant_chunk_ids": [],
+      "expected_aspects": [],
+      "ground_truth_answer": "Based on the available local technical documentation, there is insufficient evidence to answer this question.",
+      "expected_refusal": true,
+      "min_relevant_chunks": 0
+    }
+  ]
+}
