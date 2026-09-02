@@ -33,6 +33,8 @@ class Settings:
     agent_max_hops: int = int(os.getenv("AGENT_MAX_HOPS", "2"))
     query_rewriter_enabled: bool = os.getenv("QUERY_REWRITER_ENABLED", "true").lower() in ("true", "1", "yes")
     sufficiency_check_enabled: bool = os.getenv("SUFFICIENCY_CHECK_ENABLED", "true").lower() in ("true", "1", "yes")
+    crag_enabled: bool = os.getenv("CRAG_ENABLED", "true").lower() in ("true", "1", "yes")
+    crag_min_rerank_score: float = float(os.getenv("CRAG_MIN_RERANK_SCORE", "-5.0"))
 
     def __post_init__(self):
         if not self.qdrant_url:

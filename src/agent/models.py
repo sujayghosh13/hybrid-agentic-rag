@@ -46,6 +46,9 @@ class HopTrace:
         }
 
 
+from src.correction.models import CorrectionTrace
+
+
 @dataclass
 class AgentResponse:
     """Final output returned by LocalQwenAgent."""
@@ -59,6 +62,9 @@ class AgentResponse:
     hop_traces: List[HopTrace] = field(default_factory=list)
     hops_executed: int = 1
     rewritten_queries: List[str] = field(default_factory=list)
+    correction_traces: List[CorrectionTrace] = field(default_factory=list)
+    final_evidence_grade: Optional[str] = None
+    is_corrected: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -72,4 +78,7 @@ class AgentResponse:
             "hop_traces": [ht.to_dict() for ht in self.hop_traces],
             "hops_executed": self.hops_executed,
             "rewritten_queries": self.rewritten_queries,
+            "correction_traces": [ct.to_dict() for ct in self.correction_traces],
+            "final_evidence_grade": self.final_evidence_grade,
+            "is_corrected": self.is_corrected,
         }

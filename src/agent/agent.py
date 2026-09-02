@@ -15,13 +15,16 @@ from src.agent.prompts import (
 )
 from src.agent.tools import BaseTool, HybridSearchTool, RerankTool, ToolRegistry
 from src.config import settings
+from src.correction.corrective_action import CorrectiveActionEngine
+from src.correction.evaluator import EvidenceEvaluator
+from src.correction.models import CorrectionTrace, EvidenceEvaluation, EvidenceGrade
 from src.reranking.models import RerankedResult
 
 logger = logging.getLogger(__name__)
 
 
 class LocalQwenAgent:
-    """Local offline-first Agent powered by Qwen3 via Ollama."""
+    """Local offline-first Agent powered by Qwen3 via Ollama with Corrective RAG (CRAG)."""
 
     def __init__(
         self,
@@ -29,6 +32,8 @@ class LocalQwenAgent:
         hybrid_search_tool: Optional[HybridSearchTool] = None,
         rerank_tool: Optional[RerankTool] = None,
         registry: Optional[ToolRegistry] = None,
+        evidence_evaluator: Optional[EvidenceEvaluator] = None,
+        corrective_action_engine: Optional[CorrectiveActionEngine] = None,
     ):
         self.llm = llm_client or OllamaClient()
         self.search_tool = hybrid_search_tool or HybridSearchTool()
@@ -37,6 +42,9 @@ class LocalQwenAgent:
         self.registry = registry or ToolRegistry()
         self.registry.register(self.search_tool)
         self.registry.register(self.rerank_tool)
+
+        self.evaluator = evidence_evaluator or EvidenceEvaluator(llm_client=self.llm)
+        self.corrective_engine = corrective_action_engine or CorrectiveActionEngine(llm_client=self.llm)
 
     def should_retrieve(self, query: str) -> bool:
         """Decide if local technical documentation retrieval is required for the query."""
@@ -125,11 +133,12 @@ class LocalQwenAgent:
         return True, None
 
     def run(self, query: str) -> AgentResponse:
-        """Run the full agentic query workflow with multi-hop retrieval and sufficiency check."""
+        """Run the full agentic CRAG workflow with unified global retrieval budget (max 2 hops)."""
         start_time = time.time()
         thought_process: List[str] = []
         tool_calls: List[ToolCall] = []
         hop_traces: List[HopTrace] = []
+        correction_traces: List[CorrectionTrace] = []
         rewritten_queries: List[str] = []
 
         if not query or not query.strip():
@@ -143,7 +152,7 @@ class LocalQwenAgent:
         query = query.strip()
         thought_process.append(f"Received query: '{query}'")
 
-        # Step 1: Decision on whether retrieval is needed
+        # Step 1: Query Routing
         retrieval_needed = self.should_retrieve(query)
 
         if not retrieval_needed:
@@ -172,52 +181,43 @@ class LocalQwenAgent:
                     metadata={"error": str(e)},
                 )
 
-        # Step 2: Multi-Hop Retrieval Loop (Strictly bounded at max_hops <= 2)
+        # Step 2: Unified Global Retrieval Budget Lifecycle (max_hops <= 2)
         all_chunks_dict: Dict[str, RerankedResult] = {}
-        missing_aspect: Optional[str] = None
-        max_hops = min(settings.agent_max_hops, 2)
-        executed_hops = 0
+        executed_queries: List[str] = []
+        max_retrieval_hops = min(settings.agent_max_hops, 2)
+        total_retrieval_hops = 0
 
-        for hop in range(1, max_hops + 1):
-            executed_hops = hop
-            thought_process.append(f"--- Starting Retrieval Hop {hop}/{max_hops} ---")
+        # --- GLOBAL RETRIEVAL HOP 1: Initial Retrieval & CRAG Evaluation ---
+        total_retrieval_hops += 1
+        thought_process.append(f"--- Global Retrieval Hop 1/{max_retrieval_hops}: Initial Retrieval ---")
 
-            # A. Query Rewriting / Optimization
-            search_query = self.rewrite_query(query, missing_aspect=missing_aspect)
-            rewritten_queries.append(search_query)
+        search_query = self.rewrite_query(query)
+        rewritten_queries.append(search_query)
+        executed_queries.append(search_query)
 
-            # B. Duplicate Query Detection (Prevent infinite retrieval loops)
-            if rewritten_queries.count(search_query) > 1:
-                thought_process.append(f"Query '{search_query}' was already searched in an earlier hop. Breaking loop.")
-                break
-
-            # C. Hybrid Search Tool
-            thought_process.append(f"Invoking 'hybrid_search' for query: '{search_query}' (Top {settings.rerank_candidates_count})")
-            try:
-                candidates = self.search_tool.execute(query=search_query, top_k=settings.rerank_candidates_count)
-                tool_calls.append(
-                    ToolCall(
-                        tool_name="hybrid_search",
-                        arguments={"query": search_query, "top_k": settings.rerank_candidates_count},
-                        result=candidates,
-                    )
+        thought_process.append(f"Invoking 'hybrid_search' for query: '{search_query}' (Top {settings.rerank_candidates_count})")
+        try:
+            candidates = self.search_tool.execute(query=search_query, top_k=settings.rerank_candidates_count)
+            tool_calls.append(
+                ToolCall(
+                    tool_name="hybrid_search",
+                    arguments={"query": search_query, "top_k": settings.rerank_candidates_count},
+                    result=candidates,
                 )
-                thought_process.append(f"Hybrid search returned {len(candidates)} candidate chunks.")
-            except Exception as e:
-                logger.error(f"Error in hybrid search tool: {e}", exc_info=True)
-                return AgentResponse(
-                    query=query,
-                    answer=f"Error retrieving technical documentation: {e}",
-                    retrieval_needed=True,
-                    thought_process=thought_process,
-                    metadata={"error": str(e)},
-                )
+            )
+            thought_process.append(f"Hybrid search returned {len(candidates)} candidate chunks.")
+        except Exception as e:
+            logger.error(f"Error in hybrid search tool: {e}", exc_info=True)
+            return AgentResponse(
+                query=query,
+                answer=f"Error retrieving technical documentation: {e}",
+                retrieval_needed=True,
+                thought_process=thought_process,
+                metadata={"error": str(e)},
+            )
 
-            if not candidates:
-                thought_process.append(f"No candidates found for query: '{search_query}'.")
-                break
-
-            # D. Cross-Encoder Rerank Tool
+        reranked_chunks: List[RerankedResult] = []
+        if candidates:
             thought_process.append(f"Invoking 'rerank' on {len(candidates)} candidates -> selecting top {settings.rerank_top_k}")
             try:
                 reranked_chunks = self.rerank_tool.execute(
@@ -243,56 +243,154 @@ class LocalQwenAgent:
                     metadata={"error": str(e)},
                 )
 
-            # E. Merge and deduplicate by chunk_id
-            added_count = 0
-            for chunk in reranked_chunks:
-                if chunk.chunk_id not in all_chunks_dict or chunk.rerank_score > all_chunks_dict[chunk.chunk_id].rerank_score:
-                    all_chunks_dict[chunk.chunk_id] = chunk
-                    added_count += 1
+        added_count_1 = 0
+        for chunk in reranked_chunks:
+            if chunk.chunk_id not in all_chunks_dict or chunk.rerank_score > all_chunks_dict[chunk.chunk_id].rerank_score:
+                all_chunks_dict[chunk.chunk_id] = chunk
+                added_count_1 += 1
 
-            thought_process.append(f"Hop {hop} added {added_count} new/updated chunks. Total unique context chunks: {len(all_chunks_dict)}.")
+        thought_process.append(f"Hop 1 added {added_count_1} new/updated chunks. Total unique context chunks: {len(all_chunks_dict)}.")
 
-            # Form current context pool
-            current_context = sorted(all_chunks_dict.values(), key=lambda x: -x.rerank_score)[:settings.rerank_top_k]
+        current_context = sorted(all_chunks_dict.values(), key=lambda x: -x.rerank_score)[:settings.rerank_top_k]
 
-            # F. Sufficiency Check
-            is_sufficient, missing_aspect = self.evaluate_sufficiency(query, current_context)
-            hop_traces.append(
-                HopTrace(
-                    hop_index=hop,
-                    query_used=search_query,
-                    candidates_retrieved=len(candidates),
-                    reranked_chunks_added=added_count,
-                    is_sufficient=is_sufficient,
-                    missing_aspect=missing_aspect,
-                )
+        # Evaluate Evidence Quality (Deterministic fast-path + LLM)
+        eval_result = self.evaluator.evaluate(query, current_context)
+        thought_process.append(
+            f"Evidence Quality Grade: {eval_result.grade.value} | Reason: {eval_result.reason or 'N/A'} | Missing: {eval_result.missing_aspect or 'None'}"
+        )
+
+        hop_traces.append(
+            HopTrace(
+                hop_index=1,
+                query_used=search_query,
+                candidates_retrieved=len(candidates),
+                reranked_chunks_added=added_count_1,
+                is_sufficient=(eval_result.grade == EvidenceGrade.GOOD),
+                missing_aspect=eval_result.missing_aspect,
             )
+        )
+        correction_traces.append(
+            CorrectionTrace(
+                hop_index=1,
+                query_used=search_query,
+                evidence_grade=eval_result.grade,
+                missing_aspect=eval_result.missing_aspect,
+                reason=eval_result.reason,
+                action_taken="PROCEED_TO_SYNTHESIS" if eval_result.grade == EvidenceGrade.GOOD else f"TRIGGER_CORRECTION_{eval_result.grade.value}",
+                candidates_retrieved=len(candidates),
+                reranked_chunks_added=added_count_1,
+            )
+        )
 
-            if is_sufficient:
-                thought_process.append(f"Sufficiency check PASSED at Hop {hop}.")
-                break
+        # --- GLOBAL RETRIEVAL HOP 2: Corrective Retrieval (If PARTIAL or BAD & Budget Permits) ---
+        if eval_result.grade in (EvidenceGrade.PARTIAL, EvidenceGrade.BAD) and total_retrieval_hops < max_retrieval_hops and settings.crag_enabled:
+            corrective_query = self.corrective_engine.generate_corrective_query(query, eval_result)
+
+            if corrective_query in executed_queries:
+                thought_process.append(f"Corrective query '{corrective_query}' already searched. Breaking loop to prevent duplicates.")
             else:
-                thought_process.append(f"Sufficiency check: INSUFFICIENT. Missing aspect: '{missing_aspect}'.")
+                total_retrieval_hops += 1
+                thought_process.append(f"--- Global Retrieval Hop 2/{max_retrieval_hops}: Corrective Retrieval ({eval_result.grade.value}) ---")
+                thought_process.append(f"Executing corrective query: '{corrective_query}'")
 
-        # Step 3: Check context availability
+                rewritten_queries.append(corrective_query)
+                executed_queries.append(corrective_query)
+
+                try:
+                    corr_candidates = self.search_tool.execute(query=corrective_query, top_k=settings.rerank_candidates_count)
+                    tool_calls.append(
+                        ToolCall(
+                            tool_name="hybrid_search",
+                            arguments={"query": corrective_query, "top_k": settings.rerank_candidates_count},
+                            result=corr_candidates,
+                        )
+                    )
+                    thought_process.append(f"Corrective hybrid search returned {len(corr_candidates)} candidate chunks.")
+                except Exception as e:
+                    logger.error(f"Error in corrective hybrid search: {e}", exc_info=True)
+                    corr_candidates = []
+
+                corr_reranked: List[RerankedResult] = []
+                if corr_candidates:
+                    try:
+                        corr_reranked = self.rerank_tool.execute(
+                            query=corrective_query,
+                            candidates=corr_candidates,
+                            top_k=settings.rerank_top_k,
+                        )
+                        tool_calls.append(
+                            ToolCall(
+                                tool_name="rerank",
+                                arguments={"query": corrective_query, "candidates_count": len(corr_candidates), "top_k": settings.rerank_top_k},
+                                result=corr_reranked,
+                            )
+                        )
+                    except Exception as e:
+                        logger.error(f"Error in corrective rerank: {e}", exc_info=True)
+
+                added_count_2 = 0
+                for chunk in corr_reranked:
+                    if chunk.chunk_id not in all_chunks_dict or chunk.rerank_score > all_chunks_dict[chunk.chunk_id].rerank_score:
+                        all_chunks_dict[chunk.chunk_id] = chunk
+                        added_count_2 += 1
+
+                thought_process.append(f"Hop 2 added {added_count_2} new/updated chunks. Total unique context chunks: {len(all_chunks_dict)}.")
+
+                current_context = sorted(all_chunks_dict.values(), key=lambda x: -x.rerank_score)[:settings.rerank_top_k]
+
+                # Re-evaluate evidence quality after corrective retrieval
+                final_eval = self.evaluator.evaluate(query, current_context)
+                thought_process.append(
+                    f"Post-Correction Evidence Grade: {final_eval.grade.value} | Reason: {final_eval.reason or 'N/A'} | Missing: {final_eval.missing_aspect or 'None'}"
+                )
+
+                hop_traces.append(
+                    HopTrace(
+                        hop_index=2,
+                        query_used=corrective_query,
+                        candidates_retrieved=len(corr_candidates),
+                        reranked_chunks_added=added_count_2,
+                        is_sufficient=(final_eval.grade == EvidenceGrade.GOOD),
+                        missing_aspect=final_eval.missing_aspect,
+                    )
+                )
+                correction_traces.append(
+                    CorrectionTrace(
+                        hop_index=2,
+                        query_used=corrective_query,
+                        evidence_grade=final_eval.grade,
+                        missing_aspect=final_eval.missing_aspect,
+                        reason=final_eval.reason,
+                        action_taken="PROCEED_TO_SYNTHESIS" if final_eval.grade == EvidenceGrade.GOOD else "SYNTHESIS_WITH_INCOMPLETE_EVIDENCE",
+                        candidates_retrieved=len(corr_candidates),
+                        reranked_chunks_added=added_count_2,
+                    )
+                )
+                eval_result = final_eval
+
+        # Step 3: Final Context Pool & Anti-Hallucination Refusal Check
         final_context = sorted(all_chunks_dict.values(), key=lambda x: -x.rerank_score)[:settings.rerank_top_k]
 
-        if not final_context:
-            thought_process.append("No matching context chunks found across all retrieval hops.")
+        if not final_context or eval_result.grade == EvidenceGrade.BAD:
+            thought_process.append("Evidence quality is BAD / No usable documentation found. Refusing to hallucinate.")
             return AgentResponse(
                 query=query,
-                answer="Based on the available local documentation, no relevant information was found to answer this question.",
+                answer="Based on the available local technical documentation, there is insufficient evidence to answer this question.",
                 retrieval_needed=True,
+                sources=[chunk.to_dict() for chunk in final_context],
                 tool_calls=tool_calls,
                 thought_process=thought_process,
                 hop_traces=hop_traces,
-                hops_executed=executed_hops,
+                hops_executed=total_retrieval_hops,
                 rewritten_queries=rewritten_queries,
-                metadata={"latency_sec": round(time.time() - start_time, 3)},
+                correction_traces=correction_traces,
+                final_evidence_grade=eval_result.grade.value,
+                is_corrected=(len(correction_traces) > 1),
+                metadata={"latency_sec": round(time.time() - start_time, 3), "refusal": True},
             )
 
-        # Step 4: Synthesize Grounded Answer with LLM
-        thought_process.append(f"Synthesizing final answer grounded on {len(final_context)} unique context chunks.")
+        # Step 4: Synthesize Final Grounded Answer with LLM
+        thought_process.append(f"Synthesizing final answer grounded strictly on {len(final_context)} unique context chunks.")
         synthesis_prompt = build_synthesis_prompt(query=query, context_chunks=final_context)
 
         try:
@@ -313,13 +411,16 @@ class LocalQwenAgent:
                 tool_calls=tool_calls,
                 thought_process=thought_process,
                 hop_traces=hop_traces,
-                hops_executed=executed_hops,
+                hops_executed=total_retrieval_hops,
                 rewritten_queries=rewritten_queries,
+                correction_traces=correction_traces,
+                final_evidence_grade=eval_result.grade.value,
+                is_corrected=(len(correction_traces) > 1),
                 metadata={"error": str(e)},
             )
 
         elapsed_time = round(time.time() - start_time, 3)
-        thought_process.append(f"Answer synthesized successfully in {elapsed_time}s across {executed_hops} hop(s).")
+        thought_process.append(f"Answer synthesized successfully in {elapsed_time}s across {total_retrieval_hops} global hop(s).")
 
         sources = [chunk.to_dict() for chunk in final_context]
 
@@ -331,13 +432,17 @@ class LocalQwenAgent:
             tool_calls=tool_calls,
             thought_process=thought_process,
             hop_traces=hop_traces,
-            hops_executed=executed_hops,
+            hops_executed=total_retrieval_hops,
             rewritten_queries=rewritten_queries,
+            correction_traces=correction_traces,
+            final_evidence_grade=eval_result.grade.value,
+            is_corrected=(len(correction_traces) > 1),
             metadata={
                 "latency_sec": elapsed_time,
                 "model": getattr(self.llm, "model", "mock"),
                 "unique_chunks_used": len(final_context),
-                "hops_executed": executed_hops,
+                "hops_executed": total_retrieval_hops,
+                "final_evidence_grade": eval_result.grade.value,
             },
         )
 

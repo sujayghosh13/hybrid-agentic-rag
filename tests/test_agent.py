@@ -347,9 +347,9 @@ def test_multi_hop_retrieval_and_deduplication():
     def mock_llm_logic(prompt: str) -> str:
         if "Optimized Search Keywords:" in prompt:
             return "Docker bridge network basics"
-        if "Generate a targeted search query" in prompt:
+        if "Generate a targeted search query" in prompt or "Missing Technical Aspect:" in prompt or "Targeted Search Keywords:" in prompt:
             return "Docker bridge port publishing"
-        if "Is the context sufficient" in prompt:
+        if "Is the context sufficient" in prompt or "Evaluate evidence quality:" in prompt:
             call_count["sufficiency"] += 1
             if call_count["sufficiency"] == 1:
                 return "INSUFFICIENT: port publishing"
@@ -385,10 +385,10 @@ def test_max_hops_safety_limit(mock_tools):
     def mock_always_insufficient(prompt: str) -> str:
         if "Optimized Search Keywords:" in prompt:
             return "Docker bridge query 1"
-        if "Generate a targeted search query" in prompt:
+        if "Generate a targeted search query" in prompt or "Missing Technical Aspect:" in prompt or "Targeted Search Keywords:" in prompt:
             rewrite_count["count"] += 1
             return f"Docker bridge query {rewrite_count['count'] + 1}"
-        if "Is the context sufficient" in prompt:
+        if "Is the context sufficient" in prompt or "Evaluate evidence quality:" in prompt:
             return "INSUFFICIENT: still missing complex details"
         return "Answer synthesized on available context despite partial sufficiency."
 
@@ -413,9 +413,9 @@ def test_duplicate_query_loop_break(mock_tools):
     search_tool, rerank_tool = mock_tools
 
     def mock_identical_rewrite(prompt: str) -> str:
-        if "Optimized Search Keywords:" in prompt or "Generate a targeted search query" in prompt:
+        if "Optimized Search Keywords:" in prompt or "Generate a targeted search query" in prompt or "Missing Technical Aspect:" in prompt:
             return "Identical Docker Query"
-        if "Is the context sufficient" in prompt:
+        if "Is the context sufficient" in prompt or "Evaluate evidence quality:" in prompt:
             return "INSUFFICIENT: missing info"
         return "Answer."
 
@@ -426,8 +426,263 @@ def test_duplicate_query_loop_break(mock_tools):
         rerank_tool=rerank_tool,
     )
 
-    response = agent.run("Tell me about Docker bridge.")
+    response = agent.run("Tell me about Docker bridge networking.")
 
     # Second hop generates same query -> breaks loop immediately
+    assert response.hops_executed <= 2
+    assert "was already searched" in " ".join(response.thought_process) or "already searched" in " ".join(response.thought_process)
+
+
+# =========================================================================
+# Phase 5 Unit Tests: Corrective RAG (CRAG) & Global Retrieval Budget
+# =========================================================================
+from src.correction.evaluator import EvidenceEvaluator
+from src.correction.models import EvidenceGrade
+
+
+def test_crag_good_path_no_correction(mock_tools):
+    search_tool, rerank_tool = mock_tools
+
+    def mock_logic(prompt: str) -> str:
+        if "Evaluate evidence quality:" in prompt:
+            return "GRADE: GOOD\nMISSING: NONE\nREASON: Complete facts present."
+        return "Complete grounded answer about Docker bridge."
+
+    mock_llm = MockOllamaClient(response_generator=mock_logic)
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    response = agent.run("How does Docker bridge networking work?")
+
+    assert response.hops_executed == 1
+    assert response.final_evidence_grade == "GOOD"
+    assert response.is_corrected is False
+    assert len(response.correction_traces) == 1
+    assert response.correction_traces[0].action_taken == "PROCEED_TO_SYNTHESIS"
+    assert "Complete grounded answer" in response.answer
+
+
+def test_crag_partial_triggers_single_corrective_hop():
+    hop1_candidates = [
+        SearchResult(
+            chunk_id="chunk_1",
+            text="Docker bridge basics.",
+            source="docker-bridge.html",
+            metadata={"filename": "docker-bridge.html"},
+            score=0.03,
+            dense_rank=1,
+            sparse_rank=1,
+            rrf_score=0.03,
+        ),
+    ]
+    hop2_candidates = [
+        SearchResult(
+            chunk_id="chunk_2",
+            text="Docker port publishing and masquerading.",
+            source="docker-bridge.html",
+            metadata={"filename": "docker-bridge.html"},
+            score=0.04,
+            dense_rank=1,
+            sparse_rank=1,
+            rrf_score=0.04,
+        ),
+    ]
+
+    mock_retriever = MockHybridRetriever(
+        query_responses={
+            "How does Docker bridge networking and port publishing work?": hop1_candidates,
+            "Docker bridge port publishing": hop2_candidates,
+        }
+    )
+    search_tool = HybridSearchTool(retriever=mock_retriever)
+    rerank_tool = RerankTool(reranker=MockCrossEncoderReranker())
+
+    eval_count = {"count": 0}
+
+    def mock_crag_flow(prompt: str) -> str:
+        if "Missing Technical Aspect:" in prompt or "Targeted Search Keywords:" in prompt:
+            return "Docker bridge port publishing"
+        if "Evaluate evidence quality:" in prompt:
+            eval_count["count"] += 1
+            if eval_count["count"] == 1:
+                return "GRADE: PARTIAL\nMISSING: port publishing\nREASON: Missing port forwarding facts."
+            return "GRADE: GOOD\nMISSING: NONE\nREASON: All port facts now present."
+        return "Comprehensive answer covering bridge and port publishing."
+
+    mock_llm = MockOllamaClient(response_generator=mock_crag_flow)
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    response = agent.run("How does Docker bridge networking and port publishing work?")
+
     assert response.hops_executed == 2
-    assert "was already searched in an earlier hop" in " ".join(response.thought_process)
+    assert response.is_corrected is True
+    assert response.final_evidence_grade == "GOOD"
+    assert len(response.correction_traces) == 2
+    assert response.correction_traces[0].evidence_grade == EvidenceGrade.PARTIAL
+    assert response.correction_traces[1].evidence_grade == EvidenceGrade.GOOD
+
+    # Deduplicated chunks: chunk_1 and chunk_2
+    source_ids = [s["chunk_id"] for s in response.sources]
+    assert "chunk_1" in source_ids
+    assert "chunk_2" in source_ids
+
+
+def test_crag_global_retrieval_budget_never_exceeds_two(mock_tools):
+    search_tool, rerank_tool = mock_tools
+    eval_count = {"count": 0}
+
+    def mock_persistent_partial(prompt: str) -> str:
+        if "Missing Technical Aspect:" in prompt:
+            return "Docker bridge obscure edge case"
+        if "Evaluate evidence quality:" in prompt:
+            eval_count["count"] += 1
+            return "GRADE: PARTIAL\nMISSING: obscure details\nREASON: Still partial."
+        return "Synthesized answer on best available evidence."
+
+    mock_llm = MockOllamaClient(response_generator=mock_persistent_partial)
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    response = agent.run("How does Docker bridge networking work in complex edge cases?")
+
+    # Under no circumstances can global retrieval hops exceed 2
+    assert response.hops_executed <= 2
+    assert len(response.hop_traces) <= 2
+    assert len(response.correction_traces) <= 2
+
+
+def test_crag_persistent_bad_evidence_yields_grounded_refusal():
+    # Empty retriever returning no results
+    mock_retriever = MockHybridRetriever(query_responses={"Docker impossible query": []})
+    search_tool = HybridSearchTool(retriever=mock_retriever)
+    rerank_tool = RerankTool(reranker=MockCrossEncoderReranker())
+
+    mock_llm = MockOllamaClient(
+        default_response="GRADE: BAD\nMISSING: everything\nREASON: No documentation exists."
+    )
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    response = agent.run("Docker impossible query")
+
+    assert response.final_evidence_grade == "BAD"
+    assert "insufficient evidence" in response.answer.lower()
+    assert response.metadata.get("refusal") is True
+
+
+def test_crag_chunk_deduplication_preserves_best_rerank_score():
+    chunk_v1 = SearchResult(
+        chunk_id="chunk_shared",
+        text="Docker bridge text v1.",
+        source="docker-bridge.html",
+        metadata={"filename": "docker-bridge.html"},
+        score=0.01,
+        dense_rank=1,
+        sparse_rank=1,
+        rrf_score=0.01,
+    )
+    chunk_v2 = SearchResult(
+        chunk_id="chunk_shared",
+        text="Docker bridge text v2 with higher relevance.",
+        source="docker-bridge.html",
+        metadata={"filename": "docker-bridge.html"},
+        score=0.05,
+        dense_rank=1,
+        sparse_rank=1,
+        rrf_score=0.05,
+    )
+
+    mock_retriever = MockHybridRetriever(
+        query_responses={
+            "Docker bridge initial query": [chunk_v1],
+            "Docker bridge corrective query": [chunk_v2],
+        }
+    )
+
+    class DynamicReranker:
+        def rerank(self, query: str, candidates, top_k: int = 5):
+            score = 1.0 if "initial" in query else 4.0
+            return [
+                RerankedResult(
+                    chunk_id=c.chunk_id,
+                    text=c.text,
+                    source=c.source,
+                    metadata=c.metadata,
+                    score=score,
+                    dense_rank=1,
+                    sparse_rank=1,
+                    rrf_score=c.score,
+                    rerank_score=score,
+                    rerank_rank=1,
+                )
+                for c in candidates
+            ]
+
+    search_tool = HybridSearchTool(retriever=mock_retriever)
+    rerank_tool = RerankTool(reranker=DynamicReranker())
+
+    eval_count = {"count": 0}
+
+    def mock_logic(prompt: str) -> str:
+        if "Optimized Search Keywords:" in prompt:
+            return "Docker bridge initial query"
+        if "Missing Technical Aspect:" in prompt or "Targeted Search Keywords:" in prompt:
+            return "Docker bridge corrective query"
+        if "Evaluate evidence quality:" in prompt:
+            eval_count["count"] += 1
+            if eval_count["count"] == 1:
+                return "GRADE: PARTIAL\nMISSING: better score\nREASON: partial"
+            return "GRADE: GOOD\nMISSING: NONE\nREASON: good"
+        return "Answer."
+
+    mock_llm = MockOllamaClient(response_generator=mock_logic)
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    response = agent.run("Docker bridge initial query")
+
+    assert len(response.sources) == 1
+    assert response.sources[0]["chunk_id"] == "chunk_shared"
+    assert response.sources[0]["rerank_score"] == 4.0  # Kept the higher score from Hop 2
+
+
+def test_crag_duplicate_corrective_query_break(mock_tools):
+    search_tool, rerank_tool = mock_tools
+
+    def mock_identical_corrective(prompt: str) -> str:
+        if "Optimized Search Keywords:" in prompt:
+            return "Docker bridge identical query"
+        if "Missing Technical Aspect:" in prompt or "Targeted Search Keywords:" in prompt:
+            return "Docker bridge identical query"
+        if "Evaluate evidence quality:" in prompt:
+            return "GRADE: PARTIAL\nMISSING: details\nREASON: partial"
+        return "Answer."
+
+    mock_llm = MockOllamaClient(response_generator=mock_identical_corrective)
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    response = agent.run("Docker bridge identical query")
+
+    # Corrective query matches initial query -> breaks before Hop 2 search
+    assert response.hops_executed == 1
+    assert "already searched" in " ".join(response.thought_process)
