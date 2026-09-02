@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from src.reranking.models import RerankedResult
 
 
@@ -13,6 +13,28 @@ Respond with ONLY ONE WORD:
 """
 
 
+REWRITE_SYSTEM_PROMPT = """You are an expert search query optimizer for technical documentation.
+Your job is to convert a user question into a concise, high-signal keyword search query suitable for hybrid dense vector and BM25 retrieval.
+
+Rules:
+1. Strip out conversational phrases, polite preamble, and filler words.
+2. Focus strictly on core technical terms, commands, configurations, and concepts.
+3. If specific missing information is requested, produce a query targeting that specific missing aspect.
+4. Output ONLY the search query keywords on a single line. Do not provide explanations or quotes.
+"""
+
+
+SUFFICIENCY_SYSTEM_PROMPT = """You are a strict technical verification evaluator.
+Evaluate whether the provided context chunks contain sufficient factual information to answer the user question.
+
+Respond in exactly ONE of the following formats:
+- SUFFICIENT
+- INSUFFICIENT: <concise missing technical concept or entity needed>
+
+Do NOT output any additional text.
+"""
+
+
 SYNTHESIS_SYSTEM_PROMPT = """You are an offline-first technical AI assistant.
 Your job is to provide accurate, factual, and well-structured answers grounded strictly in the provided documentation context.
 
@@ -22,6 +44,30 @@ GUIDELINES:
 3. Be clear, direct, and technically precise.
 4. When relevant, reference specific configuration details, commands, or concepts found in the context.
 """
+
+
+def build_rewrite_prompt(query: str, missing_aspect: Optional[str] = None) -> str:
+    """Build prompt for optimizing user query into retrieval keywords."""
+    if missing_aspect:
+        return (
+            f"Original Question: {query}\n"
+            f"Missing Information: {missing_aspect}\n"
+            f"Generate a targeted search query for the missing information:"
+        )
+    return (
+        f"Original Question: {query}\n"
+        f"Optimized Search Keywords:"
+    )
+
+
+def build_sufficiency_prompt(query: str, context_chunks: List[RerankedResult]) -> str:
+    """Build prompt for evaluating context sufficiency."""
+    context_text = format_context_blocks(context_chunks, max_chars_per_chunk=800)
+    return (
+        f"Context:\n{context_text}\n\n"
+        f"User Question: {query}\n\n"
+        f"Is the context sufficient to answer the question?"
+    )
 
 
 def format_context_blocks(chunks: List[RerankedResult], max_chars_per_chunk: int = 1500) -> str:

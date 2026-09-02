@@ -30,6 +30,9 @@ class Settings:
     ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen3:4b")
     agent_temperature: float = float(os.getenv("AGENT_TEMPERATURE", "0.1"))
     agent_max_iterations: int = int(os.getenv("AGENT_MAX_ITERATIONS", "5"))
+    agent_max_hops: int = int(os.getenv("AGENT_MAX_HOPS", "2"))
+    query_rewriter_enabled: bool = os.getenv("QUERY_REWRITER_ENABLED", "true").lower() in ("true", "1", "yes")
+    sufficiency_check_enabled: bool = os.getenv("SUFFICIENCY_CHECK_ENABLED", "true").lower() in ("true", "1", "yes")
 
     def __post_init__(self):
         if not self.qdrant_url:

@@ -2,16 +2,23 @@ import pytest
 
 from src.agent.agent import LocalQwenAgent
 from src.agent.llm import MockOllamaClient, OllamaConnectionError
-from src.agent.models import AgentResponse, ToolCall
+from src.agent.models import AgentResponse, HopTrace, ToolCall
 from src.agent.tools import BaseTool, HybridSearchTool, RerankTool, ToolRegistry
+from src.config import settings
 from src.reranking.models import RerankedResult
 from src.retrieval.models import SearchResult
 
 
 class MockHybridRetriever:
-    """Mock HybridRetriever returning fixed candidate search results."""
+    """Mock HybridRetriever returning candidate search results based on query."""
+
+    def __init__(self, query_responses=None):
+        self.query_responses = query_responses or {}
 
     def hybrid_search(self, query: str, top_k: int = 20):
+        if query in self.query_responses:
+            return self.query_responses[query]
+
         return [
             SearchResult(
                 chunk_id="chunk_1",
@@ -122,6 +129,10 @@ def test_agent_full_retrieval_and_answer_synthesis(mock_tools):
     def mock_response(prompt: str) -> str:
         if "Decision:" in prompt:
             return "RETRIEVE"
+        if "Optimized Search Keywords:" in prompt:
+            return "Docker bridge networking configuration"
+        if "Is the context sufficient" in prompt:
+            return "SUFFICIENT"
         return "Docker bridge networking creates a private internal network on the host."
 
     mock_llm = MockOllamaClient(response_generator=mock_response)
@@ -145,6 +156,8 @@ def test_agent_full_retrieval_and_answer_synthesis(mock_tools):
     assert response.tool_calls[0].tool_name == "hybrid_search"
     assert response.tool_calls[1].tool_name == "rerank"
     assert len(response.thought_process) > 0
+    assert len(response.hop_traces) == 1
+    assert response.hop_traces[0].is_sufficient is True
 
 
 def test_agent_direct_conversational_query(mock_tools):
@@ -184,6 +197,10 @@ def test_ollama_connection_error_handling(mock_tools):
         def generate(self, prompt, system=None, temperature=None):
             if "Decision:" in prompt:
                 return "RETRIEVE"
+            if "Optimized Search Keywords:" in prompt:
+                return "Docker networking"
+            if "Is the context sufficient" in prompt:
+                return "SUFFICIENT"
             raise OllamaConnectionError("Connection refused on port 11434")
 
     failing_llm = FailingLLMClient()
@@ -196,4 +213,221 @@ def test_ollama_connection_error_handling(mock_tools):
     response = agent.run("How does Docker networking work?")
     assert "Could not connect to the local Ollama LLM server" in response.answer
     assert response.metadata["ollama_status"] == "unreachable"
-    assert len(response.sources) == 2  # Retrieval succeeded before LLM error
+    assert len(response.sources) == 2
+
+
+# =========================================================================
+# Phase 4B Unit Tests: Query Rewriting, Sufficiency, and Multi-Hop Loop
+# =========================================================================
+
+
+def test_query_rewriting_hop1(mock_tools):
+    search_tool, rerank_tool = mock_tools
+    mock_llm = MockOllamaClient(default_response="Docker bridge network driver configuration")
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    rewritten = agent.rewrite_query("Can you tell me how to configure the bridge driver in Docker?")
+    assert rewritten == "Docker bridge network driver configuration"
+
+
+def test_query_rewriting_with_missing_aspect(mock_tools):
+    search_tool, rerank_tool = mock_tools
+    mock_llm = MockOllamaClient(default_response="Docker bridge network DNS resolution automatic")
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    rewritten = agent.rewrite_query(
+        "How does Docker bridge networking work?",
+        missing_aspect="automatic container DNS resolution",
+    )
+    assert rewritten == "Docker bridge network DNS resolution automatic"
+
+
+def test_sufficiency_check_sufficient(mock_tools):
+    search_tool, rerank_tool = mock_tools
+    mock_llm = MockOllamaClient(default_response="SUFFICIENT")
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    candidates = search_tool.execute("bridge network")
+    reranked = rerank_tool.execute("bridge network", candidates)
+    is_sufficient, missing = agent.evaluate_sufficiency("How does Docker bridge work?", reranked)
+
+    assert is_sufficient is True
+    assert missing is None
+
+
+def test_sufficiency_check_insufficient(mock_tools):
+    search_tool, rerank_tool = mock_tools
+    mock_llm = MockOllamaClient(default_response="INSUFFICIENT: port publishing and IP masquerading")
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    candidates = search_tool.execute("bridge network")
+    reranked = rerank_tool.execute("bridge network", candidates)
+    is_sufficient, missing = agent.evaluate_sufficiency("How does Docker bridge work?", reranked)
+
+    assert is_sufficient is False
+    assert missing == "port publishing and IP masquerading"
+
+
+def test_multi_hop_retrieval_and_deduplication():
+    # Hop 1 returns chunk_1 and chunk_2
+    hop1_candidates = [
+        SearchResult(
+            chunk_id="chunk_1",
+            text="Docker bridge network basics.",
+            source="docker-bridge.html",
+            metadata={"filename": "docker-bridge.html"},
+            score=0.03,
+            dense_rank=1,
+            sparse_rank=1,
+            rrf_score=0.03,
+        ),
+        SearchResult(
+            chunk_id="chunk_2",
+            text="User-defined bridge networks.",
+            source="docker-networking.html",
+            metadata={"filename": "docker-networking.html"},
+            score=0.02,
+            dense_rank=2,
+            sparse_rank=2,
+            rrf_score=0.02,
+        ),
+    ]
+
+    # Hop 2 returns chunk_2 (duplicate) and chunk_3 (new)
+    hop2_candidates = [
+        SearchResult(
+            chunk_id="chunk_2",
+            text="User-defined bridge networks updated.",
+            source="docker-networking.html",
+            metadata={"filename": "docker-networking.html"},
+            score=0.02,
+            dense_rank=2,
+            sparse_rank=2,
+            rrf_score=0.02,
+        ),
+        SearchResult(
+            chunk_id="chunk_3",
+            text="Port publishing and iptables rules on Docker bridge.",
+            source="docker-ports.html",
+            metadata={"filename": "docker-ports.html"},
+            score=0.035,
+            dense_rank=1,
+            sparse_rank=1,
+            rrf_score=0.035,
+        ),
+    ]
+
+    mock_retriever = MockHybridRetriever(
+        query_responses={
+            "Docker bridge network basics": hop1_candidates,
+            "Docker bridge port publishing": hop2_candidates,
+        }
+    )
+    search_tool = HybridSearchTool(retriever=mock_retriever)
+    rerank_tool = RerankTool(reranker=MockCrossEncoderReranker())
+
+    call_count = {"sufficiency": 0, "rewrite": 0}
+
+    def mock_llm_logic(prompt: str) -> str:
+        if "Optimized Search Keywords:" in prompt:
+            return "Docker bridge network basics"
+        if "Generate a targeted search query" in prompt:
+            return "Docker bridge port publishing"
+        if "Is the context sufficient" in prompt:
+            call_count["sufficiency"] += 1
+            if call_count["sufficiency"] == 1:
+                return "INSUFFICIENT: port publishing"
+            return "SUFFICIENT"
+        return "Comprehensive answer covering bridge networking and port publishing."
+
+    mock_llm = MockOllamaClient(response_generator=mock_llm_logic)
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    response = agent.run("How does Docker bridge networking and port publishing work?")
+
+    assert response.hops_executed == 2
+    assert len(response.hop_traces) == 2
+    assert response.hop_traces[0].is_sufficient is False
+    assert response.hop_traces[1].is_sufficient is True
+
+    # Confirm unique deduplicated chunks: chunk_1, chunk_2, chunk_3
+    chunk_ids = [s["chunk_id"] for s in response.sources]
+    assert len(chunk_ids) == len(set(chunk_ids))
+    assert "chunk_1" in chunk_ids
+    assert "chunk_2" in chunk_ids
+    assert "chunk_3" in chunk_ids
+
+
+def test_max_hops_safety_limit(mock_tools):
+    search_tool, rerank_tool = mock_tools
+    rewrite_count = {"count": 0}
+
+    def mock_always_insufficient(prompt: str) -> str:
+        if "Optimized Search Keywords:" in prompt:
+            return "Docker bridge query 1"
+        if "Generate a targeted search query" in prompt:
+            rewrite_count["count"] += 1
+            return f"Docker bridge query {rewrite_count['count'] + 1}"
+        if "Is the context sufficient" in prompt:
+            return "INSUFFICIENT: still missing complex details"
+        return "Answer synthesized on available context despite partial sufficiency."
+
+    mock_llm = MockOllamaClient(response_generator=mock_always_insufficient)
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    response = agent.run("How does Docker bridge networking work in all complex edge cases?")
+
+    # Max hops is strictly bounded at 2
+    assert response.hops_executed == 2
+    assert len(response.hop_traces) == 2
+    assert response.hop_traces[0].is_sufficient is False
+    assert response.hop_traces[1].is_sufficient is False
+    assert len(response.sources) > 0
+
+
+def test_duplicate_query_loop_break(mock_tools):
+    search_tool, rerank_tool = mock_tools
+
+    def mock_identical_rewrite(prompt: str) -> str:
+        if "Optimized Search Keywords:" in prompt or "Generate a targeted search query" in prompt:
+            return "Identical Docker Query"
+        if "Is the context sufficient" in prompt:
+            return "INSUFFICIENT: missing info"
+        return "Answer."
+
+    mock_llm = MockOllamaClient(response_generator=mock_identical_rewrite)
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    response = agent.run("Tell me about Docker bridge.")
+
+    # Second hop generates same query -> breaks loop immediately
+    assert response.hops_executed == 2
+    assert "was already searched in an earlier hop" in " ".join(response.thought_process)
