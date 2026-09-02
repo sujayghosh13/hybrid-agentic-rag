@@ -37,6 +37,7 @@ class Settings:
     crag_min_rerank_score: float = float(os.getenv("CRAG_MIN_RERANK_SCORE", "-5.0"))
     api_host: str = os.getenv("API_HOST", "0.0.0.0")
     api_port: int = int(os.getenv("API_PORT", "8000"))
+    fastapi_base_url: str = os.getenv("FASTAPI_BASE_URL", "http://127.0.0.1:8000")
     cors_origins: str = os.getenv(
         "CORS_ORIGINS",
         "http://localhost:8501,http://127.0.0.1:8501,http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000",
