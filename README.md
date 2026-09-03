@@ -94,36 +94,36 @@ flowchart TD
 flowchart TB
     subgraph Host ["Host Machine (Windows / Linux / macOS)"]
         Browser["User Web Browser"]
-        OllamaDaemon["Host-Native Ollama Daemon\n(Port 11434, Qwen3:4b)"]
-        HostData["./data Directory\n(chunks.jsonl, bm25_index.pkl, cache)"]
+        OllamaDaemon["Host-Native Ollama Daemon<br/>Port 11434, Qwen3:4b"]
+        HostData["Local Data Directory<br/>chunks.jsonl, bm25_index.pkl, cache"]
     end
 
     subgraph DockerNetwork ["Docker Bridge Network (hybrid_rag_network)"]
         subgraph StreamlitContainer ["hybrid_rag_ui (Streamlit)"]
-            StreamlitApp["Streamlit Server\n(Port 8501)"]
+            StreamlitApp["Streamlit Server<br/>Port 8501"]
         end
 
         subgraph FastAPIContainer ["hybrid_rag_api (FastAPI)"]
-            FastAPIApp["FastAPI Server\n(Port 8000)"]
+            FastAPIApp["FastAPI Server<br/>Port 8000"]
             RAGCore["RAG Pipeline & Embeddings / Reranker"]
         end
 
         subgraph QdrantContainer ["hybrid_rag_qdrant (Qdrant v1.7.4)"]
-            QdrantEngine["Vector Storage Engine\n(Ports 6333, 6334 - Internal Only)"]
+            QdrantEngine["Vector Storage Engine<br/>Ports 6333, 6334 - Internal Only"]
         end
 
-        QdrantVol[("Named Volume\nhybrid_rag_qdrant_storage\n(/qdrant/storage)")]
+        QdrantVol[("Named Volume<br/>hybrid_rag_qdrant_storage")]
     end
 
-    Browser -->|http://localhost:8501| StreamlitApp
-    Browser -.->|http://localhost:8000 (Direct API)| FastAPIApp
+    Browser -->|Streamlit UI - port 8501| StreamlitApp
+    Browser -.->|Optional API - port 8000| FastAPIApp
 
-    StreamlitApp -->|http://fastapi:8000| FastAPIApp
-    FastAPIApp -->|http://qdrant:6333| QdrantEngine
+    StreamlitApp -->|Internal HTTP - port 8000| FastAPIApp
+    FastAPIApp -->|Internal HTTP - port 6333| QdrantEngine
     QdrantEngine --- QdrantVol
-    HostData -->|Bind Mount ./data:/app/data| FastAPIApp
+    HostData -->|Bind mount - app data| FastAPIApp
 
-    FastAPIApp -->|http://host.docker.internal:11434\n(via host-gateway)| OllamaDaemon
+    FastAPIApp -->|Host gateway - port 11434| OllamaDaemon
 ```
 
 ---
