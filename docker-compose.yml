@@ -4,12 +4,93 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.7.4
     container_name: hybrid_rag_qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
+    restart: unless-stopped
+    # Port 6333 is kept internal to the Docker network by default.
+    # Uncomment the ports section below only if direct host-side debugging or dashboard access is desired.
+    # ports:
+    #   - "6333:6333"
+    expose:
+      - "6333"
+      - "6334"
     volumes:
       - qdrant_storage:/qdrant/storage
-    restart: always
+    networks:
+      - rag_network
+    healthcheck:
+      # Built-in pure bash TCP check (works reliably inside Debian-based container without curl/wget)
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: hybrid_rag_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION=hybrid_chunks
+      - BM25_INDEX_PATH=/app/data/processed/bm25_index.pkl
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=qwen3:4b
+      - EMBEDDING_MODEL_NAME=BAAI/bge-small-en-v1.5
+      - RERANKER_MODEL_NAME=cross-encoder/ms-marco-MiniLM-L-6-v2
+      - HF_HOME=/app/data/cache/huggingface
+      - CORS_ORIGINS=http://localhost:8501,http://127.0.0.1:8501,http://localhost:8000,http://127.0.0.1:8000
+    volumes:
+      # Explicit data mount for RAG indexes, chunks, and HuggingFace cache
+      - ./data:/app/data
+    extra_hosts:
+      # Enables Linux container to resolve native Windows host Ollama daemon
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    networks:
+      - rag_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ui
+    container_name: hybrid_rag_ui
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - FASTAPI_BASE_URL=http://fastapi:8000
+    depends_on:
+      fastapi:
+        condition: service_healthy
+    networks:
+      - rag_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f http://localhost:8501/_stcore/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   qdrant_storage:
+    name: hybrid_rag_qdrant_storage
+
+networks:
+  rag_network:
+    name: hybrid_rag_network
+    driver: bridge

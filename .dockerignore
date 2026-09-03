@@ -1,0 +1,21 @@
+.git
+.gitignore
+.venv
+venv
+ENV
+env
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache
+.coverage
+htmlcov
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Exclude generated evaluation run artifacts from Docker build context
+data/evaluation/results
