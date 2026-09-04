@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.agent.llm import BaseLLMClient, OllamaClient, OllamaConnectionError, OllamaError
+from src.agent.llm import BaseLLMClient, OllamaClient, OllamaConnectionError, OllamaError, call_llm_generate
 from src.agent.models import AgentResponse, HopTrace, ToolCall
 from src.agent.prompts import (
     REWRITE_SYSTEM_PROMPT,
@@ -65,10 +65,12 @@ class LocalQwenAgent:
             return True
 
         try:
-            routing_decision = self.llm.generate(
+            routing_decision = call_llm_generate(
+                self.llm,
                 prompt=f"User Query: {query}\nDecision:",
                 system=ROUTER_SYSTEM_PROMPT,
                 temperature=0.0,
+                max_tokens=10,
             )
             decision = routing_decision.strip().upper()
             logger.info(f"[Agent Routing] Query: '{query}' -> Decision: '{decision}'")
@@ -84,10 +86,13 @@ class LocalQwenAgent:
 
         prompt = build_rewrite_prompt(query, missing_aspect=missing_aspect)
         try:
-            rewritten = self.llm.generate(
+            rewritten = call_llm_generate(
+                self.llm,
                 prompt=prompt,
                 system=REWRITE_SYSTEM_PROMPT,
                 temperature=0.0,
+                max_tokens=40,
+                stop=["\n"],
             )
             cleaned = rewritten.strip().strip('"').strip("'").split("\n")[0].strip()
             if cleaned and len(cleaned) > 2:
@@ -112,10 +117,12 @@ class LocalQwenAgent:
 
         prompt = build_sufficiency_prompt(query, context_chunks)
         try:
-            eval_response = self.llm.generate(
+            eval_response = call_llm_generate(
+                self.llm,
                 prompt=prompt,
                 system=SUFFICIENCY_SYSTEM_PROMPT,
                 temperature=0.0,
+                max_tokens=60,
             )
             decision_text = eval_response.strip()
             logger.info(f"[Sufficiency Check] Response: '{decision_text}'")
@@ -158,9 +165,11 @@ class LocalQwenAgent:
         if not retrieval_needed:
             thought_process.append("Query classified as conversational/direct. Generating direct answer.")
             try:
-                direct_answer = self.llm.generate(
+                direct_answer = call_llm_generate(
+                    self.llm,
                     prompt=query,
                     system="You are a helpful and polite technical AI assistant.",
+                    max_tokens=800,
                 )
                 return AgentResponse(
                     query=query,
@@ -394,10 +403,12 @@ class LocalQwenAgent:
         synthesis_prompt = build_synthesis_prompt(query=query, context_chunks=final_context)
 
         try:
-            answer = self.llm.generate(
+            answer = call_llm_generate(
+                self.llm,
                 prompt=synthesis_prompt,
                 system=SYNTHESIS_SYSTEM_PROMPT,
                 temperature=settings.agent_temperature,
+                max_tokens=1400,
             )
         except OllamaConnectionError as e:
             return self._handle_ollama_connection_error(query, e, thought_process, tool_calls, final_context)

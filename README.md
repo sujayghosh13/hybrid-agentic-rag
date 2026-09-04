@@ -105,25 +105,25 @@ flowchart TB
 
         subgraph FastAPIContainer ["hybrid_rag_api (FastAPI)"]
             FastAPIApp["FastAPI Server<br/>Port 8000"]
-            RAGCore["RAG Pipeline & Embeddings / Reranker"]
+            RAGCore["RAG Pipeline and Embeddings / Reranker"]
         end
 
         subgraph QdrantContainer ["hybrid_rag_qdrant (Qdrant v1.7.4)"]
             QdrantEngine["Vector Storage Engine<br/>Ports 6333, 6334 - Internal Only"]
         end
 
-        QdrantVol[("Named Volume<br/>hybrid_rag_qdrant_storage")]
+        QdrantVol["Named Volume: hybrid_rag_qdrant_storage"]
     end
 
-    Browser -->|Streamlit UI - port 8501| StreamlitApp
-    Browser -.->|Optional API - port 8000| FastAPIApp
+    Browser -->|Streamlit UI on Port 8501| StreamlitApp
+    Browser -. Optional Direct API on Port 8000 .-> FastAPIApp
 
-    StreamlitApp -->|Internal HTTP - port 8000| FastAPIApp
-    FastAPIApp -->|Internal HTTP - port 6333| QdrantEngine
-    QdrantEngine --- QdrantVol
-    HostData -->|Bind mount - app data| FastAPIApp
+    StreamlitApp -->|Internal HTTP on Port 8000| FastAPIApp
+    FastAPIApp -->|Internal HTTP on Port 6333| QdrantEngine
+    QdrantEngine -->|Persistent Storage| QdrantVol
+    HostData -->|Bind Mount Data Directory| FastAPIApp
 
-    FastAPIApp -->|Host gateway - port 11434| OllamaDaemon
+    FastAPIApp -->|Host Gateway on Port 11434| OllamaDaemon
 ```
 
 ---

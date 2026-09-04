@@ -148,20 +148,32 @@ class DenseRetriever:
 
         query_vector = self.embedder.encode(query, convert_to_numpy=True).tolist()
 
-        # Handle qdrant-client versions API
+        # Handle qdrant-client versions API (v1.10+ uses query_points, earlier used search)
         try:
-            hits = self.client.search(
-                collection_name=self.collection_name,
-                query_vector=query_vector,
-                limit=top_k,
-            )
-        except AttributeError:
-            response = self.client.query_points(
-                collection_name=self.collection_name,
-                query=query_vector,
-                limit=top_k,
-            )
-            hits = response.points
+            if hasattr(self.client, "query_points"):
+                response = self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=query_vector,
+                    limit=top_k,
+                )
+                hits = response.points
+            elif hasattr(self.client, "search"):
+                hits = self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=query_vector,
+                    limit=top_k,
+                )
+            else:
+                logger.warning("QdrantClient has neither 'query_points' nor 'search' method.")
+                return []
+        except Exception as e:
+            if "404" in str(e):
+                logger.warning(
+                    f"Qdrant collection '{self.collection_name}' not found on server (404). "
+                    "Returning empty dense results. Run 'python scripts/build_index.py' to populate Qdrant."
+                )
+                return []
+            raise
 
         results: List[SearchResult] = []
         for rank, hit in enumerate(hits, start=1):

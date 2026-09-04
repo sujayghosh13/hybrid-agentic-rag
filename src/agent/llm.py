@@ -1,11 +1,29 @@
 from abc import ABC, abstractmethod
 import logging
+import re
 from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def clean_llm_response(text: str) -> str:
+    """Strip <think>...</think> reasoning tags and whitespace from LLM output."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    return cleaned.strip()
+
+
+def call_llm_generate(llm_client: Any, prompt: str, **kwargs) -> str:
+    """Invoke llm.generate, gracefully falling back if a mock only supports basic args."""
+    try:
+        return llm_client.generate(prompt=prompt, **kwargs)
+    except TypeError:
+        fallback_kwargs = {k: v for k, v in kwargs.items() if k in ("system", "temperature")}
+        return llm_client.generate(prompt=prompt, **fallback_kwargs)
 
 
 class OllamaError(Exception):
@@ -32,6 +50,9 @@ class BaseLLMClient(ABC):
         prompt: str,
         system: Optional[str] = None,
         temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stop: Optional[List[str]] = None,
+        **kwargs,
     ) -> str:
         pass
 
@@ -40,12 +61,15 @@ class BaseLLMClient(ABC):
         self,
         messages: List[Dict[str, str]],
         temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stop: Optional[List[str]] = None,
+        **kwargs,
     ) -> str:
         pass
 
 
 class OllamaClient(BaseLLMClient):
-    """Client for local Ollama server running Qwen3."""
+    """Client for local Ollama server running Qwen3 / Qwen2.5."""
 
     def __init__(
         self,
@@ -62,15 +86,24 @@ class OllamaClient(BaseLLMClient):
         prompt: str,
         system: Optional[str] = None,
         temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stop: Optional[List[str]] = None,
+        **kwargs,
     ) -> str:
         url = f"{self.base_url}/api/generate"
-        payload = {
+        options: Dict[str, Any] = {
+            "temperature": temperature if temperature is not None else settings.agent_temperature,
+        }
+        if max_tokens is not None:
+            options["num_predict"] = max_tokens
+        if stop is not None:
+            options["stop"] = stop
+
+        payload: Dict[str, Any] = {
             "model": self.model,
             "prompt": prompt,
             "stream": False,
-            "options": {
-                "temperature": temperature if temperature is not None else settings.agent_temperature,
-            },
+            "options": options,
         }
         if system:
             payload["system"] = system
@@ -81,7 +114,11 @@ class OllamaClient(BaseLLMClient):
                 if response.status_code != 200:
                     raise OllamaResponseError(f"Ollama returned HTTP {response.status_code}: {response.text}")
                 data = response.json()
-                return data.get("response", "").strip()
+                raw_res = data.get("response", "")
+                # If thinking model generated thought but response field is empty, fallback to thinking
+                if not raw_res.strip() and data.get("thinking"):
+                    raw_res = data.get("thinking", "")
+                return clean_llm_response(raw_res)
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             raise OllamaConnectionError(
                 f"Could not connect to Ollama at '{self.base_url}'. Is Ollama running? Error: {e}"
@@ -95,15 +132,24 @@ class OllamaClient(BaseLLMClient):
         self,
         messages: List[Dict[str, str]],
         temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stop: Optional[List[str]] = None,
+        **kwargs,
     ) -> str:
         url = f"{self.base_url}/api/chat"
-        payload = {
+        options: Dict[str, Any] = {
+            "temperature": temperature if temperature is not None else settings.agent_temperature,
+        }
+        if max_tokens is not None:
+            options["num_predict"] = max_tokens
+        if stop is not None:
+            options["stop"] = stop
+
+        payload: Dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "stream": False,
-            "options": {
-                "temperature": temperature if temperature is not None else settings.agent_temperature,
-            },
+            "options": options,
         }
 
         try:
@@ -113,7 +159,10 @@ class OllamaClient(BaseLLMClient):
                     raise OllamaResponseError(f"Ollama returned HTTP {response.status_code}: {response.text}")
                 data = response.json()
                 msg = data.get("message", {})
-                return msg.get("content", "").strip()
+                content = msg.get("content", "")
+                if not content.strip() and msg.get("thinking"):
+                    content = msg.get("thinking", "")
+                return clean_llm_response(content)
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             raise OllamaConnectionError(
                 f"Could not connect to Ollama at '{self.base_url}'. Is Ollama running? Error: {e}"
@@ -141,8 +190,16 @@ class MockOllamaClient(BaseLLMClient):
         prompt: str,
         system: Optional[str] = None,
         temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stop: Optional[List[str]] = None,
+        **kwargs,
     ) -> str:
-        self.call_history.append({"prompt": prompt, "system": system, "temperature": temperature})
+        call_entry = {"prompt": prompt, "system": system, "temperature": temperature}
+        if max_tokens is not None:
+            call_entry["max_tokens"] = max_tokens
+        if stop is not None:
+            call_entry["stop"] = stop
+        self.call_history.append(call_entry)
         if self.response_generator:
             return self.response_generator(prompt)
         return self.default_response
@@ -151,8 +208,16 @@ class MockOllamaClient(BaseLLMClient):
         self,
         messages: List[Dict[str, str]],
         temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stop: Optional[List[str]] = None,
+        **kwargs,
     ) -> str:
-        self.call_history.append({"messages": messages, "temperature": temperature})
+        call_entry = {"messages": messages, "temperature": temperature}
+        if max_tokens is not None:
+            call_entry["max_tokens"] = max_tokens
+        if stop is not None:
+            call_entry["stop"] = stop
+        self.call_history.append(call_entry)
         last_content = messages[-1]["content"] if messages else ""
         if self.response_generator:
             return self.response_generator(last_content)

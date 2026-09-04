@@ -2,6 +2,7 @@ import streamlit as st
 
 from src.ui.api_client import APIConnectionError, RAGApiClient, RAGClientError
 from src.ui.components import (
+    format_markdown_text,
     render_answer,
     render_error,
     render_header,
@@ -119,7 +120,7 @@ def main() -> None:
         with st.expander("View past questions in this session", expanded=False):
             for item in reversed(st.session_state.history):
                 st.markdown(f"**Q:** *{item['question']}*")
-                st.markdown(f"**A:** {item['answer']}")
+                st.markdown(f"**A:**\n\n{format_markdown_text(item['answer'])}")
                 st.markdown("---")
 
 

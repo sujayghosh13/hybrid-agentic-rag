@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from src.agent.llm import BaseLLMClient, OllamaClient
+from src.agent.llm import BaseLLMClient, OllamaClient, call_llm_generate
 from src.correction.models import EvidenceEvaluation, EvidenceGrade
 from src.correction.prompts import (
     CORRECTIVE_QUERY_SYSTEM_PROMPT,
@@ -28,10 +28,13 @@ class CorrectiveActionEngine:
 
         prompt = build_corrective_query_prompt(query, evaluation)
         try:
-            raw_response = self.llm.generate(
+            raw_response = call_llm_generate(
+                self.llm,
                 prompt=prompt,
                 system=CORRECTIVE_QUERY_SYSTEM_PROMPT,
                 temperature=0.0,
+                max_tokens=40,
+                stop=["\n"],
             )
             cleaned = raw_response.strip().strip('"').strip("'").split("\n")[0].strip()
             if cleaned and len(cleaned) > 2:

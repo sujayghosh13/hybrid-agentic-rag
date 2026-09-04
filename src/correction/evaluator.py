@@ -1,7 +1,7 @@
 import logging
 from typing import List, Optional
 
-from src.agent.llm import BaseLLMClient, OllamaClient
+from src.agent.llm import BaseLLMClient, OllamaClient, call_llm_generate
 from src.config import settings
 from src.correction.models import EvidenceEvaluation, EvidenceGrade
 from src.correction.prompts import CRAG_EVALUATION_SYSTEM_PROMPT, build_crag_evaluation_prompt
@@ -47,10 +47,12 @@ class EvidenceEvaluator:
         # Tier 2: Structured LLM Grader
         prompt = build_crag_evaluation_prompt(query, context_chunks)
         try:
-            raw_response = self.llm.generate(
+            raw_response = call_llm_generate(
+                self.llm,
                 prompt=prompt,
                 system=CRAG_EVALUATION_SYSTEM_PROMPT,
                 temperature=0.0,
+                max_tokens=100,
             )
             return self._parse_evaluation_response(raw_response)
         except Exception as e:

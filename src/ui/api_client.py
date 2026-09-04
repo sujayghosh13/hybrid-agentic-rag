@@ -48,10 +48,10 @@ class RAGApiClient:
     def __init__(
         self,
         base_url: Optional[str] = None,
-        timeout: float = 180.0,
+        timeout: Optional[float] = None,
     ):
         self.base_url = (base_url or settings.fastapi_base_url).rstrip("/")
-        self.timeout = timeout
+        self.timeout = timeout if timeout is not None else getattr(settings, "ui_query_timeout", 360.0)
 
     def check_health(self) -> Dict[str, Any]:
         """Query GET /health to verify API liveness and component readiness.

@@ -1,3 +1,5 @@
+import math
+import re
 from typing import Any, Dict, List, Optional
 import streamlit as st
 
@@ -8,6 +10,95 @@ from src.ui.api_client import (
     APIValidationError,
     BackendUnavailableError,
 )
+
+
+def format_markdown_text(text: str) -> str:
+    """Format and clean markdown text to ensure code blocks, tables, and commands render cleanly in Streamlit."""
+    if not text:
+        return ""
+
+    # Normalize line endings
+    text = text.replace("\r\n", "\n")
+
+    # Separate concatenated prompt commands (e.g. '$docker ...$docker ...' or '$ cmd1 $ cmd2')
+    text = re.sub(r'(\$\s*[a-zA-Z0-9_\-]+[^\n$]+?)(\$\s*[a-zA-Z0-9_\-]+)', r'\1\n\2', text)
+
+    lines = text.split("\n")
+    formatted_lines: List[str] = []
+    in_code_block = False
+    indent_len = 0
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+
+        # Check for code fence
+        if stripped.startswith("```"):
+            if not in_code_block:
+                # Opening code fence
+                indent_len = len(line) - len(line.lstrip())
+                if formatted_lines and formatted_lines[-1].strip() != "":
+                    formatted_lines.append("")
+                # Place fence at base margin so Streamlit parser treats it as top-level code block
+                lang = stripped[3:].strip()
+                formatted_lines.append(f"```{lang}")
+                in_code_block = True
+            else:
+                # Closing code fence
+                formatted_lines.append("```")
+                in_code_block = False
+                indent_len = 0
+                if i + 1 < len(lines) and lines[i + 1].strip() != "":
+                    formatted_lines.append("")
+            continue
+
+        if in_code_block:
+            # If code was indented inside a list, strip the list indentation
+            if indent_len > 0 and line.startswith(" " * indent_len):
+                formatted_lines.append(line[indent_len:])
+            else:
+                formatted_lines.append(line)
+        else:
+            # Ensure blank line before markdown tables
+            if (
+                stripped.startswith("|")
+                and formatted_lines
+                and not formatted_lines[-1].strip().startswith("|")
+                and formatted_lines[-1].strip() != ""
+            ):
+                formatted_lines.append("")
+
+            # Ensure blank line before headings (#, ##, ###)
+            if re.match(r"^#{1,6}\s", stripped) and formatted_lines and formatted_lines[-1].strip() != "":
+                formatted_lines.append("")
+
+            # Ensure blank line before horizontal rules (---)
+            if stripped == "---" and formatted_lines and formatted_lines[-1].strip() != "":
+                formatted_lines.append("")
+
+            formatted_lines.append(line)
+
+            # Ensure blank line after horizontal rules (---)
+            if stripped == "---" and i + 1 < len(lines) and lines[i + 1].strip() != "":
+                formatted_lines.append("")
+
+    return "\n".join(formatted_lines)
+
+
+def format_source_text(text: str) -> str:
+    """Format raw retrieved source chunks so technical text, CLI outputs, and config blocks render cleanly."""
+    if not text:
+        return ""
+
+    # Normalize line endings
+    text = text.replace("\r\n", "\n")
+
+    # Fix concatenated commands in raw text like '$docker ...$docker ...'
+    text = re.sub(r'(\$\s*[a-zA-Z0-9_\-]+[^\n$]+?)(\$\s*[a-zA-Z0-9_\-]+)', r'\1\n\2', text)
+
+    # Protect non-HTML angle brackets like <LOOPBACK,UP,LOWER_UP> or <container_id> from being eaten by HTML parser
+    text = re.sub(r'<([A-Za-z0-9_\-,\s]+)>', r'&lt;\1&gt;', text)
+
+    return format_markdown_text(text)
 
 
 def render_header() -> None:
@@ -77,9 +168,10 @@ def render_sidebar_status(
 
 
 def render_answer(answer: str) -> None:
-    """Render the synthesized grounded answer."""
+    """Render the synthesized grounded answer with clean markdown and code block formatting."""
     st.subheader("💡 Answer")
-    st.markdown(answer)
+    formatted_answer = format_markdown_text(answer)
+    st.markdown(formatted_answer)
 
 
 def render_orchestration_metadata(
@@ -129,11 +221,19 @@ def render_sources(sources: List[Dict[str, Any]]) -> None:
         score = s.get("rerank_score")
         text = s.get("text", "")
 
-        score_badge = f" — Score: `{score:.4f}`" if score is not None else ""
+        if score is not None:
+            # Cross-Encoder (ms-marco-MiniLM-L-6-v2) outputs raw unbounded relevance logits.
+            # Positive logit (>0) indicates high relevance; negative logit (<0) indicates lower/marginal relevance.
+            # Compute sigmoid to also display intuitive normalized relevance percentage [0% - 100%].
+            rel_pct = (1.0 / (1.0 + math.exp(-score))) * 100.0
+            score_badge = f" | Rerank Score: `{score:+.4f}` ({rel_pct:.1f}% rel)"
+        else:
+            score_badge = ""
+
         header = f"[{idx}] {chunk_id} ({source_doc}){score_badge}"
 
         with st.expander(header, expanded=(idx == 1)):
-            st.markdown(text)
+            st.markdown(format_source_text(text))
 
 
 def render_error(error: Exception) -> None:
