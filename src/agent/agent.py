@@ -8,7 +8,6 @@ from src.agent.prompts import (
     REWRITE_SYSTEM_PROMPT,
     ROUTER_SYSTEM_PROMPT,
     SUFFICIENCY_SYSTEM_PROMPT,
-    SYNTHESIS_SYSTEM_PROMPT,
     build_rewrite_prompt,
     build_sufficiency_prompt,
     build_synthesis_prompt,
@@ -21,6 +20,21 @@ from src.correction.models import CorrectionTrace, EvidenceEvaluation, EvidenceG
 from src.reranking.models import RerankedResult
 
 logger = logging.getLogger(__name__)
+
+SYNTHESIS_SYSTEM_PROMPT = """You are an offline-first technical AI assistant.
+Your job is to provide accurate, factual, and strictly grounded answers based ONLY on the provided documentation context.
+
+STRICT GROUNDING & FACTUALITY RULES:
+1. Strict Evidence Grounding: Base your answer strictly and exclusively on the retrieved context chunks. Never infer, extrapolate, or invent networking behavior, routing mechanisms, or gateway capabilities that are not explicitly documented in the retrieved text.
+2. Distinguish Network Scopes: Clearly distinguish between:
+   - default Docker behavior (e.g., default bridge network isolation; containers on the default bridge can communicate via IP address only, not by container name)
+   - user-defined network behavior (e.g., scoped isolation; containers on the same user-defined network can communicate via container names or IP addresses)
+   - behavior requiring explicit configuration (e.g., connecting a container to multiple networks using `docker network connect`, publishing ports)
+3. Cross-Network Isolation: Containers connected to different/separate networks CANNOT communicate directly. Docker enforces network isolation between distinct networks. Do NOT state or imply that containers on separate networks can communicate directly, nor that Docker routes traffic between separate networks via default gateways or `--gw-priority` (default gateways are only used for destinations outside a container's directly connected networks).
+4. Legacy Flags: Do not use or suggest legacy '--link' as a general solution unless the retrieved evidence specifically requires it.
+5. Insufficient Evidence: If the retrieved evidence does not explain a mechanism for containers on different networks to communicate other than attaching to the same network or publishing ports, explicitly state that the retrieved evidence does not provide for direct cross-network routing.
+6. Technical Precision: Be clear, concise, direct, and technically precise without guessing or speculating.
+"""
 
 
 class LocalQwenAgent:
