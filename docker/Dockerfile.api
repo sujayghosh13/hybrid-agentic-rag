@@ -18,6 +18,9 @@ COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY pyproject.toml .
 
+# Copy static HTML frontend (served by FastAPI at /app)
+COPY frontend/ ./frontend/
+
 # Environment configuration
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

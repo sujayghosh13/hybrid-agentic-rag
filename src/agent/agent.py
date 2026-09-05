@@ -140,28 +140,29 @@ class LocalQwenAgent:
     def route_and_rewrite(self, query: str) -> Tuple[bool, str]:
         """Unified router and rewriter optimization pass.
         
-        Determines retrieval requirement and optimal retrieval query in a single unified step,
-        leveraging both routing and rewrite fast-paths and caches.
+        Determines retrieval requirement and optimal retrieval query in a single unified step.
+        Hop 1 directly leverages the natural language query with semantic bi-encoder embeddings
+        and BM25 sparse search for sub-second retrieval. LLM rewriting is reserved for Hop 2
+        corrective loops when initial evidence is evaluated as insufficient.
         """
         clean_q = query.strip()
         needs_retrieval = self.should_retrieve(clean_q)
         if not needs_retrieval:
             return False, clean_q
-        rewritten = self.rewrite_query(clean_q)
-        return True, rewritten
+        return True, clean_q
 
     def _calculate_adaptive_max_tokens(self, query: str, context_chunks: List[RerankedResult]) -> int:
         """Dynamically compute max_tokens based on query complexity and retrieved context size."""
         # Base budget for concise answers
-        budget = 400
+        budget = 250
         # Multi-part or complex questions get additional generation headroom
         lower_q = query.lower()
         if any(term in lower_q for term in ("difference", "compare", "steps", "explain how", "how to", "why", "and", "both")):
-            budget += 150
+            budget += 100
         # More context blocks warrant slightly higher token limit for comprehensive coverage
         if len(context_chunks) >= 3:
-            budget += 100
-        return min(budget, 650)
+            budget += 50
+        return min(budget, 400)
 
     def evaluate_sufficiency(
         self,

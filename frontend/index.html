@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hybrid-Agentic RAG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #EEF1EE;
+    --surface: #FBFAF6;
+    --hairline: #D3D0C3;
+    --ink: #16211D;
+    --ink-soft: #55605A;
+    --accent: #0B7285;
+    --accent-soft: #DCEBEA;
+    --accent-line: #7FADAB;
+    --good: #2F7D53;
+    --good-bg: #E4F0E7;
+    --warn: #B8791C;
+    --warn-bg: #F6EBD8;
+    --bad: #B23A34;
+    --bad-bg: #F5E2E0;
+    --radius: 5px;
+    --radius-lg: 8px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin: 0;
+    padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  h1, h2, h3{
+    font-family: 'Space Grotesk', sans-serif;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  code, .mono{
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  a{ color: inherit; }
+
+  :focus-visible{
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* ---------- shell ---------- */
+
+  .shell{
+    display: grid;
+    grid-template-columns: 272px 1fr;
+    grid-template-rows: auto 1fr;
+    min-height: 100vh;
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+
+  header.top{
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 22px 28px;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .brand{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .brand-mark{
+    width: 26px;
+    height: 26px;
+    flex: none;
+  }
+
+  .brand-name{
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+
+  .top-meta{
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+  }
+
+  .status-dot{
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--good);
+    margin-right: 6px;
+    position: relative;
+    top: -1px;
+  }
+
+  .status-dot.fail{
+    background: var(--bad);
+  }
+
+  /* ---------- rail ---------- */
+
+  aside.rail{
+    border-right: 1px solid var(--hairline);
+    padding: 26px 22px;
+  }
+
+  .rail-section{
+    margin-bottom: 30px;
+  }
+
+  .rail-title{
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+  }
+
+  .pipe-step{
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 0;
+    font-size: 0.86rem;
+  }
+
+  .pipe-num{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+    width: 16px;
+    flex: none;
+    padding-top: 2px;
+  }
+
+  .pipe-label{ color: var(--ink); }
+  .pipe-sub{ display:block; color: var(--ink-soft); font-size: 0.78rem; }
+
+  .model-row{
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--hairline);
+    font-size: 0.82rem;
+    gap: 10px;
+  }
+  .model-row:last-child{ border-bottom: none; }
+
+  .model-key{ color: var(--ink-soft); }
+  .model-val{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.76rem;
+    color: var(--ink);
+    text-align: right;
+    word-break: break-word;
+  }
+
+  /* ---------- main ---------- */
+
+  main{
+    padding: 32px 32px 60px;
+  }
+
+  .hero{
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 36px;
+    align-items: center;
+    padding-bottom: 34px;
+    border-bottom: 1px solid var(--hairline);
+    margin-bottom: 32px;
+  }
+
+  .hero h1{
+    font-size: 2rem;
+    line-height: 1.15;
+    max-width: 15ch;
+  }
+
+  .hero p{
+    margin-top: 12px;
+    max-width: 46ch;
+    color: var(--ink-soft);
+  }
+
+  .diagram-wrap{
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+  }
+
+  .diagram-cap{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    margin-top: 8px;
+  }
+
+  .flow-line{
+    fill: none;
+    stroke: var(--accent-line);
+    stroke-width: 1.6;
+    stroke-dasharray: 480;
+    stroke-dashoffset: 480;
+    animation: draw 1.4s ease forwards 0.2s;
+  }
+  .flow-line.loop{
+    stroke-dasharray: 4 5;
+    stroke: var(--warn);
+    opacity: 0.85;
+  }
+  @keyframes draw{ to{ stroke-dashoffset: 0; } }
+
+  .node circle{ fill: var(--surface); stroke: var(--ink); stroke-width: 1.3; }
+  .node text{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8.5px;
+    fill: var(--ink);
+  }
+
+  /* ---------- query panel ---------- */
+
+  .query-panel{
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 26px;
+  }
+
+  .query-panel label{
+    display: block;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+  }
+
+  textarea{
+    width: 100%;
+    min-height: 74px;
+    resize: vertical;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.98rem;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+  }
+  textarea:focus{ border-color: var(--accent); }
+
+  .query-actions{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 14px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .chip-row{
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .chip{
+    font-size: 0.76rem;
+    padding: 5px 10px;
+    border: 1px solid var(--hairline);
+    background: #fff;
+    border-radius: 999px;
+    cursor: pointer;
+    color: var(--ink-soft);
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .chip:hover{ border-color: var(--accent); color: var(--accent); }
+
+  button.ask{
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    padding: 11px 20px;
+    border-radius: var(--radius);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 500;
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  button.ask:hover{ background: var(--accent); }
+  button.ask:disabled{ opacity: 0.55; cursor: default; }
+
+  .run-log{
+    margin-top: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    display: none;
+  }
+  .run-log.active{ display: block; }
+  .run-log span{ color: var(--accent); }
+
+  /* ---------- result ---------- */
+
+  #result{
+    display: none;
+  }
+  #result.active{
+    display: block;
+    animation: reveal 0.35s ease;
+  }
+  @keyframes reveal{
+    from{ opacity: 0; transform: translateY(6px); }
+    to{ opacity: 1; transform: translateY(0); }
+  }
+
+  .answer-card{
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+  }
+
+  .answer-card h2{
+    font-size: 1rem;
+    margin-bottom: 12px;
+  }
+
+  .answer-card p{
+    margin: 0;
+    max-width: 68ch;
+  }
+
+  .entity{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85em;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  .stat-strip{
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--hairline);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin: 22px 0;
+  }
+
+  .stat{
+    background: var(--surface);
+    padding: 16px 18px;
+  }
+
+  .stat-label{
+    font-size: 0.74rem;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+
+  .stat-val{
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.35rem;
+    font-weight: 600;
+  }
+
+  .badge{
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .badge.good{ background: var(--good-bg); color: var(--good); }
+  .badge.warn{ background: var(--warn-bg); color: var(--warn); }
+  .badge.bad{ background: var(--bad-bg); color: var(--bad); }
+
+  details.trace{
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    padding: 4px 18px;
+  }
+
+  details.trace summary{
+    cursor: pointer;
+    padding: 14px 0;
+    font-weight: 500;
+    font-size: 0.9rem;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  details.trace summary::-webkit-details-marker{ display: none; }
+  details.trace summary::after{
+    content: '+';
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--ink-soft);
+    font-size: 1rem;
+  }
+  details.trace[open] summary::after{ content: '–'; }
+
+  .trace-steps{
+    padding: 2px 0 18px;
+    border-top: 1px dashed var(--hairline);
+  }
+
+  .trace-step{
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 14px;
+    padding: 10px 0;
+    font-size: 0.83rem;
+  }
+  .trace-step + .trace-step{ border-top: 1px solid var(--hairline); }
+
+  .trace-tag{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+    padding-top: 1px;
+  }
+
+  .trace-body code{
+    display: block;
+    margin-top: 4px;
+    color: var(--ink-soft);
+    font-size: 0.78rem;
+  }
+
+  /* ---------- sources ---------- */
+
+  .sources-section{
+    margin-top: 22px;
+  }
+
+  .sources-title{
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 12px;
+  }
+
+  .source-card{
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+
+  .source-header{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 0.82rem;
+  }
+  .source-header:hover{ background: var(--paper); }
+
+  .source-id{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.76rem;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .source-meta{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+  }
+
+  .source-score{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .source-body{
+    display: none;
+    padding: 0 16px 14px;
+    border-top: 1px dashed var(--hairline);
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .source-card.open .source-body{
+    display: block;
+    padding-top: 12px;
+  }
+
+  .source-chevron{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    transition: transform 0.15s;
+  }
+
+  .source-card.open .source-chevron{
+    transform: rotate(90deg);
+  }
+
+  /* ---------- error ---------- */
+
+  .error-card{
+    border: 1px solid var(--bad);
+    background: var(--bad-bg);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    margin-bottom: 22px;
+    font-size: 0.88rem;
+    color: var(--bad);
+    display: none;
+  }
+  .error-card.active{ display: block; }
+
+  @media (max-width: 860px){
+    .shell{ grid-template-columns: 1fr; }
+    aside.rail{ border-right: none; border-bottom: 1px solid var(--hairline); }
+    .hero{ grid-template-columns: 1fr; }
+    .stat-strip{ grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="top">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 26 26" fill="none">
+        <rect x="1" y="1" width="24" height="24" rx="5" stroke="#16211D" stroke-width="1.4"/>
+        <circle cx="8" cy="13" r="2.4" fill="#0B7285"/>
+        <circle cx="18" cy="8" r="2.4" fill="#16211D"/>
+        <circle cx="18" cy="18" r="2.4" fill="#16211D"/>
+        <path d="M10 12L16 9M10 14L16 17" stroke="#16211D" stroke-width="1.2"/>
+      </svg>
+      <span class="brand-name">Hybrid-Agentic RAG</span>
+    </div>
+    <div class="top-meta">
+      <span><span class="status-dot" id="ollamaDot"></span><span id="ollamaLabel">ollama checking…</span></span>
+      <span class="mono" id="apiVersion">api …</span>
+    </div>
+  </header>
+
+  <aside class="rail">
+    <div class="rail-section">
+      <div class="rail-title">Pipeline</div>
+      <div class="pipe-step"><span class="pipe-num">01</span><span class="pipe-label">Route<span class="pipe-sub">classify query intent</span></span></div>
+      <div class="pipe-step"><span class="pipe-num">02</span><span class="pipe-label">Retrieve<span class="pipe-sub">dense + BM25, fused with RRF</span></span></div>
+      <div class="pipe-step"><span class="pipe-num">03</span><span class="pipe-label">Rerank<span class="pipe-sub">cross-encoder re-scores top-k</span></span></div>
+      <div class="pipe-step"><span class="pipe-num">04</span><span class="pipe-label">Grade<span class="pipe-sub">CRAG checks evidence strength</span></span></div>
+      <div class="pipe-step"><span class="pipe-num">05</span><span class="pipe-label">Correct<span class="pipe-sub">rewrite + retry, capped at 2 hops</span></span></div>
+      <div class="pipe-step"><span class="pipe-num">06</span><span class="pipe-label">Synthesize<span class="pipe-sub">answer grounded in evidence, or refuse</span></span></div>
+    </div>
+
+    <div class="rail-section">
+      <div class="rail-title">Models</div>
+      <div class="model-row"><span class="model-key">llm</span><span class="model-val" id="modelLlm">…</span></div>
+      <div class="model-row"><span class="model-key">embedding</span><span class="model-val" id="modelEmbed">…</span></div>
+      <div class="model-row"><span class="model-key">reranker</span><span class="model-val" id="modelReranker">…</span></div>
+    </div>
+
+    <div class="rail-section">
+      <div class="rail-title">Storage</div>
+      <div class="model-row"><span class="model-key">bm25 index</span><span class="model-val" id="storageBm25">…</span></div>
+      <div class="model-row"><span class="model-key">qdrant</span><span class="model-val" id="storageQdrant">…</span></div>
+    </div>
+  </aside>
+
+  <main>
+    <section class="hero">
+      <div>
+        <h1>Grounded answers for Docker and Kubernetes docs.</h1>
+        <p>Hybrid dense and sparse retrieval, cross-encoder reranking, and a corrective loop that rewrites the query and retries when evidence is weak — instead of guessing.</p>
+      </div>
+      <div class="diagram-wrap">
+        <svg viewBox="0 0 300 150" width="100%">
+          <path class="flow-line" d="M20 75 H70" />
+          <path class="flow-line" d="M100 75 H150" />
+          <path class="flow-line" d="M180 75 H230" />
+          <path class="flow-line loop" d="M215 60 C 180 20, 120 20, 100 60" />
+          <g class="node"><circle cx="15" cy="75" r="9"/><text x="15" y="93" text-anchor="middle">query</text></g>
+          <g class="node"><circle cx="85" cy="75" r="12"/><text x="85" y="79" text-anchor="middle">route</text></g>
+          <g class="node"><circle cx="165" cy="75" r="14"/><text x="165" y="79" text-anchor="middle">retrieve</text></g>
+          <g class="node"><circle cx="245" cy="75" r="14"/><text x="245" y="79" text-anchor="middle">grade</text></g>
+          <g class="node"><circle cx="278" cy="75" r="10"/><text x="278" y="93" text-anchor="middle">answer</text></g>
+          <path class="flow-line" d="M259 75 H268" />
+        </svg>
+        <div class="diagram-cap">query → route → hybrid retrieve → grade → answer (dashed = corrective loop)</div>
+      </div>
+    </section>
+
+    <section class="query-panel">
+      <label for="q">Ask a technical question about Docker or Kubernetes</label>
+      <textarea id="q">How can containers on the same physical host talk to each other without exposing ports to the outside world?</textarea>
+      <div class="query-actions">
+        <div class="chip-row">
+          <button class="chip" type="button" onclick="fillQ(this)">What is the difference between user-defined and default bridge networks?</button>
+          <button class="chip" type="button" onclick="fillQ(this)">What is the role of a ReplicaSet in a Kubernetes Deployment?</button>
+        </div>
+        <button class="ask" id="askBtn" onclick="runQuery()">Ask assistant</button>
+      </div>
+      <div class="run-log" id="runLog"></div>
+    </section>
+
+    <div class="error-card" id="errorCard"></div>
+
+    <section id="result">
+      <div class="answer-card">
+        <h2>Answer</h2>
+        <p id="answerText"></p>
+      </div>
+
+      <div class="stat-strip">
+        <div class="stat">
+          <div class="stat-label">Evidence grade</div>
+          <div class="stat-val" id="statGrade"></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Retrieval hops</div>
+          <div class="stat-val" id="statHops"></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">CRAG corrected</div>
+          <div class="stat-val" id="statCorrected"></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Total latency</div>
+          <div class="stat-val" id="statLatency"></div>
+        </div>
+      </div>
+
+      <details class="trace">
+        <summary>Query rewriting trace</summary>
+        <div class="trace-steps" id="traceSteps"></div>
+      </details>
+
+      <div class="sources-section" id="sourcesSection" style="display:none">
+        <div class="sources-title" id="sourcesTitle">Retrieved sources</div>
+        <div id="sourcesList"></div>
+      </div>
+    </section>
+  </main>
+
+</div>
+
+<script>
+  var API_BASE = 'http://127.0.0.1:8000';
+
+  /* ---- chip fill (unchanged) ---- */
+  function fillQ(el){
+    document.getElementById('q').value = el.textContent;
+  }
+
+  /* ---- health check on load ---- */
+  (function checkHealth(){
+    fetch(API_BASE + '/health', { signal: AbortSignal.timeout(8000) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        // Ollama status
+        var dot = document.getElementById('ollamaDot');
+        var label = document.getElementById('ollamaLabel');
+        if(d.readiness && d.readiness.ollama_reachable){
+          dot.classList.remove('fail');
+          label.textContent = 'ollama reachable';
+        } else {
+          dot.classList.add('fail');
+          label.textContent = 'ollama unreachable';
+        }
+        // API version
+        document.getElementById('apiVersion').textContent = 'api v' + (d.version || '0.1.0');
+        // Models
+        if(d.models){
+          document.getElementById('modelLlm').textContent = d.models.ollama_model || '—';
+          document.getElementById('modelEmbed').textContent = d.models.embedding_model || '—';
+          document.getElementById('modelReranker').textContent = d.models.reranker_model || '—';
+        }
+        // Storage
+        if(d.readiness){
+          document.getElementById('storageBm25').textContent = d.readiness.bm25_index_ready ? 'ready' : 'not found';
+          document.getElementById('storageQdrant').textContent = d.readiness.qdrant_storage_ready ? 'ready' : 'not found';
+        }
+      })
+      .catch(function(){
+        document.getElementById('ollamaDot').classList.add('fail');
+        document.getElementById('ollamaLabel').textContent = 'backend unreachable';
+        document.getElementById('apiVersion').textContent = 'api offline';
+      });
+  })();
+
+  /* ---- run query (real API call) ---- */
+  function runQuery(){
+    var btn = document.getElementById('askBtn');
+    var log = document.getElementById('runLog');
+    var result = document.getElementById('result');
+    var errorCard = document.getElementById('errorCard');
+    var question = document.getElementById('q').value.trim();
+
+    if(!question) return;
+
+    btn.disabled = true;
+    result.classList.remove('active');
+    errorCard.classList.remove('active');
+    log.classList.add('active');
+
+    // Animate pipeline steps while waiting
+    var steps = ['routing query…', 'retrieving evidence (dense + BM25)…', 'reranking candidates…', 'grading evidence…', 'synthesizing answer…'];
+    var i = 0;
+    log.innerHTML = '<span>›</span> ' + steps[0];
+    var iv = setInterval(function(){
+      i++;
+      if(i < steps.length){
+        log.innerHTML = '<span>›</span> ' + steps[i];
+      } else {
+        // Loop on last step until response arrives
+        log.innerHTML = '<span>›</span> ' + steps[steps.length - 1];
+      }
+    }, 800);
+
+    fetch(API_BASE + '/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: question })
+    })
+    .then(function(r){
+      if(!r.ok){
+        return r.json().catch(function(){ return null; }).then(function(body){
+          throw new Error(body && body.detail ? body.detail : 'HTTP ' + r.status);
+        });
+      }
+      return r.json();
+    })
+    .then(function(data){
+      clearInterval(iv);
+      log.classList.remove('active');
+      btn.disabled = false;
+      renderResult(data);
+    })
+    .catch(function(err){
+      clearInterval(iv);
+      log.classList.remove('active');
+      btn.disabled = false;
+      errorCard.textContent = err.message || 'Failed to reach the backend.';
+      errorCard.classList.add('active');
+    });
+  }
+
+  /* ---- render result from real backend data ---- */
+  function renderResult(data){
+    var result = document.getElementById('result');
+    var orch = data.orchestration || {};
+    var perf = data.performance || {};
+
+    // Answer
+    document.getElementById('answerText').textContent = data.answer || '';
+
+    // Evidence grade badge
+    var grade = (orch.final_evidence_grade || 'N/A').toUpperCase();
+    var gradeClass = 'badge';
+    if(grade === 'GOOD') gradeClass += ' good';
+    else if(grade === 'PARTIAL') gradeClass += ' warn';
+    else if(grade === 'BAD') gradeClass += ' bad';
+    document.getElementById('statGrade').innerHTML = '<span class="' + gradeClass + '">' + escapeHtml(grade) + '</span>';
+
+    // Hops
+    document.getElementById('statHops').textContent = (orch.hops_executed != null ? orch.hops_executed : '—') + ' / 2';
+
+    // CRAG corrected
+    var corrected = orch.is_corrected;
+    var corrBadge = corrected ? '<span class="badge warn">Yes</span>' : '<span class="badge good">No</span>';
+    document.getElementById('statCorrected').innerHTML = corrBadge;
+
+    // Latency
+    var ms = perf.total_latency_ms;
+    if(ms != null){
+      document.getElementById('statLatency').textContent = ms >= 1000 ? (ms / 1000).toFixed(2) + 's' : Math.round(ms) + 'ms';
+    } else {
+      document.getElementById('statLatency').textContent = '—';
+    }
+
+    // Trace section
+    var traceSteps = document.getElementById('traceSteps');
+    var traceHtml = '';
+
+    // Route step
+    traceHtml += '<div class="trace-step"><span class="trace-tag">route</span><div class="trace-body">classified as <strong>' + (orch.retrieval_needed ? 'technical' : 'conversational') + '</strong>'
+      + '<code>retrieval_needed = ' + (orch.retrieval_needed ? 'true' : 'false') + '</code></div></div>';
+
+    // Rewrite step (if rewritten queries exist)
+    var queries = orch.rewritten_queries || [];
+    if(queries.length > 0){
+      for(var qi = 0; qi < queries.length; qi++){
+        traceHtml += '<div class="trace-step"><span class="trace-tag">rewrite</span><div class="trace-body">query rewritten for retrieval'
+          + '<code>"' + escapeHtml(queries[qi]) + '"</code></div></div>';
+      }
+    }
+
+    // Retrieve step
+    traceHtml += '<div class="trace-step"><span class="trace-tag">retrieve</span><div class="trace-body">dense + BM25 fused with RRF, ' + (data.sources ? data.sources.length : 0) + ' source(s) returned'
+      + '<code>hops_executed = ' + (orch.hops_executed != null ? orch.hops_executed : '—') + '</code></div></div>';
+
+    // Grade step
+    traceHtml += '<div class="trace-step"><span class="trace-tag">grade</span><div class="trace-body">evidence grade: ' + grade + (orch.is_corrected ? ', corrective retrieval triggered' : ', no correction needed')
+      + '<code>grade = ' + grade + '  hop = ' + (orch.hops_executed != null ? orch.hops_executed : '—') + '/2</code></div></div>';
+
+    traceSteps.innerHTML = traceHtml;
+
+    // Sources section
+    var sources = data.sources || [];
+    var sourcesSection = document.getElementById('sourcesSection');
+    var sourcesList = document.getElementById('sourcesList');
+    var sourcesTitle = document.getElementById('sourcesTitle');
+
+    if(sources.length > 0){
+      sourcesTitle.textContent = 'Retrieved sources (' + sources.length + ')';
+      var srcHtml = '';
+      for(var si = 0; si < sources.length; si++){
+        var s = sources[si];
+        var fileName = (s.source || '').split('/').pop() || s.source || 'unknown';
+        var chunkId = s.chunk_id || 'chunk_' + si;
+        var scoreStr = s.rerank_score != null ? s.rerank_score.toFixed(3) : '—';
+        srcHtml += '<div class="source-card" onclick="this.classList.toggle(\'open\')">'
+          + '<div class="source-header">'
+          + '<span class="source-id">' + escapeHtml(chunkId) + '</span>'
+          + '<div class="source-meta">'
+          + '<span>' + escapeHtml(fileName) + '</span>'
+          + '<span class="source-score">' + scoreStr + '</span>'
+          + '<span class="source-chevron">▶</span>'
+          + '</div>'
+          + '</div>'
+          + '<div class="source-body">' + escapeHtml(s.text || '') + '</div>'
+          + '</div>';
+      }
+      sourcesList.innerHTML = srcHtml;
+      sourcesSection.style.display = 'block';
+    } else {
+      sourcesSection.style.display = 'none';
+    }
+
+    result.classList.add('active');
+    result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function escapeHtml(t){
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(t));
+    return d.innerHTML;
+  }
+</script>
+
+</body>
+</html>

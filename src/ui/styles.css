@@ -1,0 +1,790 @@
+/* =====================================================================
+   HYBRID AGENTIC RAG - DEVELOPER / INFRASTRUCTURE DESIGN SYSTEM
+   Theme: Restrained Dark / Observability / System Tool
+   Palette:
+     Background:       #0B0F14
+     Surface:          #111820
+     Elevated Surface: #151E27
+     Borders:          #1E293B / #243447
+     Primary Text:     #E6EDF3
+     Secondary Text:   #8B98A7
+     Accent (Cyan):    #4FB3BF
+     Success (Green):  #69B578
+     Warning (Amber):  #D6A85F
+     Error (Red):      #D46A6A
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. ROOT VARIABLES & GLOBAL RESET
+   --------------------------------------------------------------------- */
+:root {
+  --har-bg: #0B0F14;
+  --har-surface: #111820;
+  --har-surface-elevated: #151E27;
+  --har-border: #1E293B;
+  --har-border-subtle: #16202C;
+  --har-border-focus: #4FB3BF;
+  --har-text-primary: #E6EDF3;
+  --har-text-secondary: #8B98A7;
+  --har-text-muted: #576575;
+  --har-accent: #4FB3BF;
+  --har-accent-hover: #63C5D1;
+  --har-accent-subtle: rgba(79, 179, 191, 0.12);
+  --har-success: #69B578;
+  --har-success-subtle: rgba(105, 181, 120, 0.14);
+  --har-warning: #D6A85F;
+  --har-warning-subtle: rgba(214, 168, 95, 0.14);
+  --har-error: #D46A6A;
+  --har-error-subtle: rgba(212, 106, 106, 0.14);
+
+  --har-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --har-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --har-radius-sm: 4px;
+  --har-radius-md: 8px;
+  --har-radius-lg: 10px;
+
+  --har-space-1: 4px;
+  --har-space-2: 8px;
+  --har-space-3: 12px;
+  --har-space-4: 16px;
+  --har-space-6: 24px;
+  --har-space-8: 32px;
+}
+
+/* Base App Overrides */
+.stApp {
+  background-color: var(--har-bg) !important;
+  color: var(--har-text-primary) !important;
+  font-family: var(--har-font-sans) !important;
+}
+
+/* Sidebar Container */
+[data-testid="stSidebar"] {
+  background-color: var(--har-surface) !important;
+  border-right: 1px solid var(--har-border) !important;
+}
+
+[data-testid="stSidebar"] > div:first-child {
+  padding-top: var(--har-space-4) !important;
+  padding-left: var(--har-space-4) !important;
+  padding-right: var(--har-space-4) !important;
+}
+
+/* Base Headings & Text */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--har-text-primary) !important;
+  font-family: var(--har-font-sans) !important;
+  letter-spacing: -0.01em;
+}
+
+p, span, label {
+  color: var(--har-text-primary);
+}
+
+/* ---------------------------------------------------------------------
+   2. PRODUCT HEADER & TECHNOLOGY BADGES
+   --------------------------------------------------------------------- */
+.har-header {
+  padding: var(--har-space-4) 0 var(--har-space-6) 0;
+  border-bottom: 1px solid var(--har-border);
+  margin-bottom: var(--har-space-6);
+}
+
+.har-header-top {
+  display: flex;
+  align-items: center;
+  gap: var(--har-space-3);
+  margin-bottom: var(--har-space-1);
+}
+
+.har-title {
+  font-family: var(--har-font-sans);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--har-text-primary);
+  margin: 0;
+}
+
+.har-subtitle {
+  font-size: 14px;
+  color: var(--har-text-secondary);
+  margin: 0 0 var(--har-space-4) 0;
+  line-height: 1.4;
+}
+
+.har-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--har-space-2);
+  align-items: center;
+}
+
+.har-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: var(--har-surface-elevated);
+  border: 1px solid var(--har-border);
+  border-radius: var(--har-radius-sm);
+  font-family: var(--har-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--har-text-primary);
+  letter-spacing: 0.02em;
+}
+
+.har-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--har-accent);
+}
+
+/* ---------------------------------------------------------------------
+   3. SIDEBAR SYSTEM STATUS PANEL
+   --------------------------------------------------------------------- */
+.har-sidebar-panel {
+  background-color: var(--har-surface-elevated);
+  border: 1px solid var(--har-border);
+  border-radius: var(--har-radius-md);
+  padding: var(--har-space-4);
+  margin-bottom: var(--har-space-4);
+}
+
+.har-sidebar-section-title {
+  font-family: var(--har-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--har-text-secondary);
+  margin-bottom: var(--har-space-2);
+}
+
+.har-status-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: var(--har-space-4);
+}
+
+.har-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--har-border-subtle);
+  font-family: var(--har-font-mono);
+  font-size: 12px;
+}
+
+.har-status-row:last-child {
+  border-bottom: none;
+}
+
+.har-status-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--har-text-primary);
+}
+
+.har-status-dot {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.har-status-ready {
+  color: var(--har-success);
+}
+
+.har-status-offline {
+  color: var(--har-error);
+}
+
+.har-status-warn {
+  color: var(--har-warning);
+}
+
+.har-status-tag {
+  font-weight: 600;
+}
+
+.har-model-block {
+  margin-bottom: var(--har-space-3);
+}
+
+.har-model-block:last-child {
+  margin-bottom: 0;
+}
+
+.har-model-label {
+  font-size: 11px;
+  color: var(--har-text-secondary);
+  margin-bottom: 2px;
+}
+
+.har-model-val {
+  font-family: var(--har-font-mono);
+  font-size: 12px;
+  color: var(--har-text-primary);
+  background-color: var(--har-bg);
+  padding: 4px 8px;
+  border-radius: var(--har-radius-sm);
+  border: 1px solid var(--har-border-subtle);
+  word-break: break-all;
+}
+
+/* Sidebar action buttons */
+[data-testid="stSidebar"] button {
+  background-color: var(--har-surface-elevated) !important;
+  color: var(--har-text-primary) !important;
+  border: 1px solid var(--har-border) !important;
+  border-radius: var(--har-radius-sm) !important;
+  font-family: var(--har-font-mono) !important;
+  font-size: 12px !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+[data-testid="stSidebar"] button:hover {
+  border-color: var(--har-accent) !important;
+  color: var(--har-accent) !important;
+}
+
+/* ---------------------------------------------------------------------
+   4. QUERY AREA & EXAMPLE CHIPS
+   --------------------------------------------------------------------- */
+.har-query-section {
+  margin-bottom: var(--har-space-6);
+}
+
+.har-query-header {
+  font-family: var(--har-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--har-text-secondary);
+  margin-bottom: var(--har-space-2);
+}
+
+/* Textarea styling */
+.stTextArea textarea {
+  background-color: var(--har-surface) !important;
+  color: var(--har-text-primary) !important;
+  border: 1px solid var(--har-border) !important;
+  border-radius: var(--har-radius-md) !important;
+  font-family: var(--har-font-sans) !important;
+  font-size: 14px !important;
+  padding: 12px 14px !important;
+  line-height: 1.5 !important;
+  transition: border-color 0.15s ease-in-out !important;
+}
+
+.stTextArea textarea:focus {
+  border-color: var(--har-border-focus) !important;
+  box-shadow: 0 0 0 1px var(--har-border-focus) !important;
+}
+
+/* Submit button styling */
+.stFormSubmitButton button {
+  background-color: var(--har-surface-elevated) !important;
+  color: var(--har-accent) !important;
+  border: 1px solid var(--har-accent) !important;
+  border-radius: var(--har-radius-md) !important;
+  font-family: var(--har-font-mono) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+  padding: 8px 20px !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+.stFormSubmitButton button:hover {
+  background-color: var(--har-accent) !important;
+  color: var(--har-bg) !important;
+  border-color: var(--har-accent-hover) !important;
+}
+
+/* Example query chips row */
+.har-chips-wrapper {
+  margin-top: var(--har-space-2);
+  margin-bottom: var(--har-space-4);
+}
+
+.har-chips-label {
+  font-family: var(--har-font-mono);
+  font-size: 11px;
+  color: var(--har-text-muted);
+  margin-bottom: var(--har-space-1);
+}
+
+/* ---------------------------------------------------------------------
+   5. ORCHESTRATION PIPELINE PROGRESS INDICATOR
+   --------------------------------------------------------------------- */
+.har-pipeline-loader {
+  background-color: var(--har-surface);
+  border: 1px solid var(--har-border);
+  border-radius: var(--har-radius-md);
+  padding: var(--har-space-4);
+  margin: var(--har-space-4) 0;
+}
+
+.har-pipeline-loader-header {
+  display: flex;
+  align-items: center;
+  gap: var(--har-space-2);
+  font-family: var(--har-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--har-accent);
+}
+
+.har-pipeline-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--har-border);
+  border-top-color: var(--har-accent);
+  border-radius: 50%;
+  animation: har-spin 0.8s linear infinite;
+}
+
+@keyframes har-spin {
+  to { transform: rotate(360deg); }
+}
+
+.har-pipeline-stages {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--har-space-2);
+  margin-top: var(--har-space-3);
+  font-family: var(--har-font-mono);
+  font-size: 11px;
+  color: var(--har-text-secondary);
+}
+
+.har-pipeline-stage {
+  padding: 4px 8px;
+  background-color: var(--har-surface-elevated);
+  border: 1px solid var(--har-border);
+  border-radius: var(--har-radius-sm);
+  color: var(--har-text-primary);
+}
+
+.har-pipeline-arrow {
+  color: var(--har-accent);
+  font-weight: bold;
+}
+
+/* ---------------------------------------------------------------------
+   6. ANSWER CARD & CONTENT TYPOGRAPHY
+   --------------------------------------------------------------------- */
+.har-answer-card {
+  background-color: var(--har-surface);
+  border: 1px solid var(--har-border);
+  border-radius: var(--har-radius-lg);
+  padding: var(--har-space-6);
+  margin-bottom: var(--har-space-6);
+}
+
+.har-answer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--har-space-4);
+  padding-bottom: var(--har-space-3);
+  border-bottom: 1px solid var(--har-border);
+}
+
+.har-answer-badge {
+  font-family: var(--har-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--har-accent);
+  background-color: var(--har-accent-subtle);
+  border: 1px solid rgba(79, 179, 191, 0.25);
+  border-radius: var(--har-radius-sm);
+  padding: 3px 8px;
+}
+
+.har-answer-body {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--har-text-primary);
+}
+
+.har-answer-body h1,
+.har-answer-body h2,
+.har-answer-body h3 {
+  margin-top: var(--har-space-4);
+  margin-bottom: var(--har-space-2);
+  color: var(--har-text-primary);
+}
+
+.har-answer-body p {
+  margin-bottom: var(--har-space-3);
+}
+
+.har-answer-body p:last-child {
+  margin-bottom: 0;
+}
+
+.har-answer-body ul,
+.har-answer-body ol {
+  padding-left: var(--har-space-4);
+  margin-bottom: var(--har-space-3);
+}
+
+.har-answer-body li {
+  margin-bottom: var(--har-space-1);
+}
+
+/* Technical inline code chips */
+.har-answer-body code,
+p code,
+li code {
+  font-family: var(--har-font-mono) !important;
+  font-size: 13px !important;
+  background-color: var(--har-surface-elevated) !important;
+  color: var(--har-accent) !important;
+  border: 1px solid var(--har-border) !important;
+  border-radius: var(--har-radius-sm) !important;
+  padding: 2px 6px !important;
+}
+
+/* Code block pre formatting */
+pre {
+  background-color: var(--har-bg) !important;
+  border: 1px solid var(--har-border) !important;
+  border-radius: var(--har-radius-md) !important;
+  padding: var(--har-space-3) !important;
+  margin: var(--har-space-3) 0 !important;
+  overflow-x: auto !important;
+}
+
+pre code {
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  color: var(--har-text-primary) !important;
+}
+
+/* Tables */
+table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin: var(--har-space-4) 0 !important;
+  font-size: 13px !important;
+}
+
+th, td {
+  padding: 8px 12px !important;
+  border: 1px solid var(--har-border) !important;
+  text-align: left !important;
+}
+
+th {
+  background-color: var(--har-surface-elevated) !important;
+  font-family: var(--har-font-mono) !important;
+  font-size: 12px !important;
+  color: var(--har-text-secondary) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+tr:nth-child(even) {
+  background-color: var(--har-surface-elevated) !important;
+}
+
+/* ---------------------------------------------------------------------
+   7. EXECUTION METRICS DASHBOARD STRIP
+   --------------------------------------------------------------------- */
+.har-metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--har-space-3);
+  margin-bottom: var(--har-space-6);
+}
+
+.har-metric-card {
+  background-color: var(--har-surface-elevated);
+  border: 1px solid var(--har-border);
+  border-radius: var(--har-radius-md);
+  padding: var(--har-space-3) var(--har-space-4);
+  display: flex;
+  flex-direction: column;
+}
+
+.har-metric-label {
+  font-family: var(--har-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--har-text-secondary);
+  margin-bottom: var(--har-space-1);
+}
+
+.har-metric-value {
+  font-family: var(--har-font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--har-text-primary);
+}
+
+.har-metric-good {
+  color: var(--har-success) !important;
+}
+
+.har-metric-warn {
+  color: var(--har-warning) !important;
+}
+
+.har-metric-bad {
+  color: var(--har-error) !important;
+}
+
+.har-metric-neutral {
+  color: var(--har-text-secondary) !important;
+}
+
+/* ---------------------------------------------------------------------
+   8. ORCHESTRATION TRACE TECHNICAL LOG
+   --------------------------------------------------------------------- */
+.har-trace-log {
+  background-color: var(--har-bg);
+  border: 1px solid var(--har-border);
+  border-radius: var(--har-radius-md);
+  padding: var(--har-space-4);
+  font-family: var(--har-font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.har-trace-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--har-space-3);
+  padding: 4px 0;
+}
+
+.har-trace-num {
+  color: var(--har-accent);
+  font-weight: 700;
+  min-width: 24px;
+}
+
+.har-trace-step-name {
+  color: var(--har-text-secondary);
+  font-weight: 600;
+  min-width: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.har-trace-content {
+  color: var(--har-text-primary);
+  flex: 1;
+  word-break: break-word;
+}
+
+.har-trace-connector {
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  color: var(--har-border);
+  font-size: 14px;
+  line-height: 1;
+  margin: 2px 0;
+}
+
+/* ---------------------------------------------------------------------
+   9. SOURCES EVIDENCE CARDS
+   --------------------------------------------------------------------- */
+.har-source-card {
+  background-color: var(--har-surface);
+  border: 1px solid var(--har-border);
+  border-radius: var(--har-radius-md);
+  padding: var(--har-space-4);
+  margin-bottom: var(--har-space-3);
+  transition: border-color 0.15s ease-in-out;
+}
+
+.har-source-card:hover {
+  border-color: var(--har-border-focus);
+}
+
+.har-source-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--har-space-2);
+  margin-bottom: var(--har-space-2);
+}
+
+.har-source-name {
+  font-family: var(--har-font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--har-text-primary);
+  word-break: break-all;
+}
+
+.har-source-badges {
+  display: flex;
+  align-items: center;
+  gap: var(--har-space-2);
+  flex-wrap: wrap;
+}
+
+.har-source-badge {
+  font-family: var(--har-font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--har-radius-sm);
+  background-color: var(--har-surface-elevated);
+  border: 1px solid var(--har-border);
+  color: var(--har-text-secondary);
+}
+
+.har-source-score {
+  color: var(--har-accent);
+  border-color: rgba(79, 179, 191, 0.3);
+}
+
+.har-source-rel {
+  color: var(--har-success);
+  border-color: rgba(105, 181, 120, 0.3);
+}
+
+.har-source-text {
+  font-family: var(--har-font-sans);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--har-text-secondary);
+  border-top: 1px solid var(--har-border-subtle);
+  padding-top: var(--har-space-2);
+  margin-top: var(--har-space-2);
+}
+
+/* Streamlit Expander Overrides */
+[data-testid="stExpander"] {
+  background-color: var(--har-surface) !important;
+  border: 1px solid var(--har-border) !important;
+  border-radius: var(--har-radius-md) !important;
+  margin-bottom: var(--har-space-3) !important;
+}
+
+[data-testid="stExpander"] summary {
+  background-color: var(--har-surface) !important;
+  color: var(--har-text-primary) !important;
+  font-family: var(--har-font-mono) !important;
+  font-size: 13px !important;
+  border-radius: var(--har-radius-md) !important;
+}
+
+[data-testid="stExpander"] summary:hover {
+  color: var(--har-accent) !important;
+}
+
+/* ---------------------------------------------------------------------
+   10. SESSION HISTORY ENTRIES
+   --------------------------------------------------------------------- */
+.har-history-item {
+  background-color: var(--har-surface);
+  border: 1px solid var(--har-border);
+  border-radius: var(--har-radius-md);
+  padding: var(--har-space-4);
+  margin-bottom: var(--har-space-3);
+}
+
+.har-history-q {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--har-text-primary);
+  margin-bottom: var(--har-space-2);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--har-space-2);
+}
+
+.har-history-q-tag {
+  font-family: var(--har-font-mono);
+  font-size: 11px;
+  color: var(--har-accent);
+  background-color: var(--har-accent-subtle);
+  padding: 2px 6px;
+  border-radius: var(--har-radius-sm);
+  border: 1px solid rgba(79, 179, 191, 0.2);
+}
+
+.har-history-a {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--har-text-secondary);
+  border-top: 1px solid var(--har-border-subtle);
+  padding-top: var(--har-space-2);
+}
+
+/* ---------------------------------------------------------------------
+   11. ERROR BANNERS
+   --------------------------------------------------------------------- */
+.har-error-banner {
+  background-color: var(--har-surface);
+  border-left: 3px solid var(--har-error);
+  border-top: 1px solid var(--har-border);
+  border-right: 1px solid var(--har-border);
+  border-bottom: 1px solid var(--har-border);
+  border-radius: var(--har-radius-md);
+  padding: var(--har-space-4);
+  margin-bottom: var(--har-space-4);
+}
+
+.har-error-title {
+  font-family: var(--har-font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--har-error);
+  margin-bottom: var(--har-space-1);
+}
+
+.har-error-msg {
+  font-size: 13px;
+  color: var(--har-text-primary);
+  margin-bottom: var(--har-space-2);
+}
+
+/* ---------------------------------------------------------------------
+   12. RESPONSIVENESS
+   --------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+  .har-metrics-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .har-metrics-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .har-badge-row {
+    gap: var(--har-space-1);
+  }
+
+  .har-title {
+    font-size: 18px;
+  }
+}

@@ -109,6 +109,8 @@ class OllamaClient(BaseLLMClient):
         }
         if getattr(settings, "ollama_num_ctx", None):
             options["num_ctx"] = settings.ollama_num_ctx
+        if getattr(settings, "ollama_num_thread", None):
+            options["num_thread"] = settings.ollama_num_thread
         if max_tokens is not None:
             options["num_predict"] = max_tokens
         if stop is not None:
@@ -118,6 +120,7 @@ class OllamaClient(BaseLLMClient):
             "model": self.model,
             "prompt": prompt,
             "stream": False,
+            "think": getattr(settings, "ollama_think", False),
             "options": options,
         }
         if system:
@@ -157,6 +160,8 @@ class OllamaClient(BaseLLMClient):
         }
         if getattr(settings, "ollama_num_ctx", None):
             options["num_ctx"] = settings.ollama_num_ctx
+        if getattr(settings, "ollama_num_thread", None):
+            options["num_thread"] = settings.ollama_num_thread
         if max_tokens is not None:
             options["num_predict"] = max_tokens
         if stop is not None:
@@ -166,6 +171,7 @@ class OllamaClient(BaseLLMClient):
             "model": self.model,
             "messages": messages,
             "stream": False,
+            "think": getattr(settings, "ollama_think", False),
             "options": options,
         }
 
@@ -204,6 +210,8 @@ class OllamaClient(BaseLLMClient):
         }
         if getattr(settings, "ollama_num_ctx", None):
             options["num_ctx"] = settings.ollama_num_ctx
+        if getattr(settings, "ollama_num_thread", None):
+            options["num_thread"] = settings.ollama_num_thread
         if max_tokens is not None:
             options["num_predict"] = max_tokens
         if stop is not None:
@@ -213,6 +221,7 @@ class OllamaClient(BaseLLMClient):
             "model": self.model,
             "prompt": prompt,
             "stream": True,
+            "think": getattr(settings, "ollama_think", False),
             "options": options,
         }
         if system:

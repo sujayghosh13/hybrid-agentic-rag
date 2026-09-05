@@ -1,6 +1,6 @@
 # Hybrid-Agentic-RAG
 
-An offline-first local Retrieval-Augmented Generation (RAG) system combining structure-aware document ingestion, hybrid dense-sparse retrieval with Reciprocal Rank Fusion (RRF), cross-encoder reranking, multi-hop agentic orchestration, Corrective RAG (CRAG) with anti-hallucination guardrails, a FastAPI backend, a Streamlit frontend, and a containerized deployment stack.
+An offline-first local Retrieval-Augmented Generation (RAG) system combining structure-aware document ingestion, hybrid dense-sparse retrieval with Reciprocal Rank Fusion (RRF), cross-encoder reranking, multi-hop agentic orchestration, Corrective RAG (CRAG) with anti-hallucination guardrails, a FastAPI backend, dual web frontends (Streamlit and static HTML), and a containerized deployment stack.
 
 ---
 
@@ -337,6 +337,23 @@ The Streamlit UI runs on port `8501`:
 
 ---
 
+## HTML Frontend (Static Web UI)
+
+An alternative lightweight HTML frontend is served directly by FastAPI at `/app` (e.g. `http://localhost:8000/app`). It is a zero-dependency single-page application requiring no build step, bundler, or Node.js runtime.
+
+**Features:**
+- **System Health Dashboard:** Real-time readiness indicators for BM25, Qdrant, Ollama, and API liveness with model information display.
+- **Query Input:** Text input with example query chips and keyboard submit (Enter).
+- **RAG Answer:** Markdown-rendered answer card using `marked.js`.
+- **Pipeline Metadata Tiles:** Evidence grade (`GOOD` / `PARTIAL` / `BAD`), retrieval hops, CRAG corrected status, and end-to-end latency.
+- **Rewritten Queries:** Displays agent-rewritten search queries.
+- **Retrieved Sources:** Expandable cards with chunk ID, source file, rerank score badge, and full chunk text.
+
+**Configuring the API Base URL:**
+The file `frontend/config.js` sets `window.__RAG_CONFIG__.API_BASE_URL`. When empty (default), the frontend uses same-origin relative requests — this works out of the box when served by FastAPI. For external hosting, set it to the full API URL (e.g. `"http://api.example.com:8000"`).
+
+---
+
 ## Repository Structure
 
 ```
@@ -349,6 +366,9 @@ hybrid-agentic-rag/
 ├── docker/
 │   ├── Dockerfile.api             # FastAPI container image definition
 │   └── Dockerfile.ui              # Streamlit container image definition
+├── frontend/
+│   ├── index.html                 # Static HTML frontend (served by FastAPI at /app)
+│   └── config.js                  # Runtime API base URL configuration
 ├── scripts/
 │   ├── ingest.py                  # Document ingestion and chunking CLI
 │   ├── build_index.py             # Dense (Qdrant) and Sparse (BM25) indexing CLI
@@ -430,7 +450,43 @@ uvicorn src.api.main:app --host 127.0.0.1 --port 8000 --reload
 # Terminal 2: Run Streamlit frontend
 streamlit run src/ui/app.py
 ```
-Access the application at `http://localhost:8501`.
+
+**Access the applications:**
+- **HTML Frontend:** `http://localhost:3000`
+- **Streamlit UI:** `http://localhost:8501`
+
+---
+
+## Quick Start (All Services)
+
+To start the complete stack from scratch:
+
+```bash
+# 1. Start Qdrant (vector database)
+docker compose up -d qdrant
+
+# 2. Start Ollama (ensure the model is pulled)
+ollama serve                   # If not already running
+ollama pull qwen3:1.7b         # Download model if needed
+
+# 3. Start FastAPI backend (API service)
+uvicorn src.api.main:app --host 127.0.0.1 --port 8000 --reload
+
+# 4. Start HTML Frontend
+python -m http.server 3000 --directory frontend
+
+# 5. (Optional) Start Streamlit frontend
+streamlit run src/ui/app.py
+```
+
+**Verify:**
+| Service | URL | Description |
+| :--- | :--- | :--- |
+| HTML Frontend | `http://localhost:3000` | Pixel-faithful Claude Web UI |
+| FastAPI Health | `http://localhost:8000/health` | API liveness and component readiness |
+| Streamlit UI | `http://localhost:8501` | Python-based web UI |
+| API Docs | `http://localhost:8000/docs` | Auto-generated Swagger UI |
+| Qdrant Dashboard | `http://localhost:6333/dashboard` | Vector database admin (if port exposed) |
 
 ---
 
