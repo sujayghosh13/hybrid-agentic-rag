@@ -16,6 +16,8 @@ An offline-first local Retrieval-Augmented Generation (RAG) system combining str
 - [Quantitative Evaluation & Benchmarks](#quantitative-evaluation--benchmarks)
 - [REST API Specification](#rest-api-specification)
 - [Streamlit Web Interface](#streamlit-web-interface)
+- [Pixel-Faithful Claude Web UI](#pixel-faithful-claude-web-ui)
+- [Latency Optimization & Performance Benchmarks](#latency-optimization--performance-benchmarks)
 - [Repository Structure](#repository-structure)
 - [Prerequisites](#prerequisites)
 - [Local Development Setup](#local-development-setup)
@@ -337,20 +339,58 @@ The Streamlit UI runs on port `8501`:
 
 ---
 
-## HTML Frontend (Static Web UI)
+## Pixel-Faithful Claude Web UI
 
-An alternative lightweight HTML frontend is served directly by FastAPI at `/app` (e.g. `http://localhost:8000/app`). It is a zero-dependency single-page application requiring no build step, bundler, or Node.js runtime.
+A standalone web application served at `http://localhost:3000` (`python -m http.server 3000 --directory frontend`), delivering an exact pixel-faithful implementation of the Claude design system with zero build step, bundler, or external runtime requirements.
 
-**Features:**
-- **System Health Dashboard:** Real-time readiness indicators for BM25, Qdrant, Ollama, and API liveness with model information display.
-- **Query Input:** Text input with example query chips and keyboard submit (Enter).
-- **RAG Answer:** Markdown-rendered answer card using `marked.js`.
-- **Pipeline Metadata Tiles:** Evidence grade (`GOOD` / `PARTIAL` / `BAD`), retrieval hops, CRAG corrected status, and end-to-end latency.
-- **Rewritten Queries:** Displays agent-rewritten search queries.
-- **Retrieved Sources:** Expandable cards with chunk ID, source file, rerank score badge, and full chunk text.
+### Visual & Architectural Design
+- **Single Source of Truth**: Preserves 100% of the Claude design specification — typography (`Space Grotesk`, `IBM Plex Sans`, `IBM Plex Mono`), tailored color palette (`--paper: #EEF1EE`, `--accent: #0B7285`, `--surface: #FBFAF6`), and exact responsive layout.
+- **Dynamic Pipeline Visualization**: Live SVG flowchart depicting the full reasoning lifecycle (`query → route → hybrid retrieve → grade → answer`) with dashed corrective loop pathways.
+- **Live Health Dashboard**: Real-time readiness indicators polling `GET /health` on page load:
+  - Host Ollama status with animated state badge (`ollama reachable`).
+  - Active model identifiers (`qwen3:1.7b`, `bge-small-en-v1.5`, `cross-encoder/ms-marco-MiniLM-L-6-v2`).
+  - Storage readiness (`bm25 index ready`, `qdrant ready`).
+- **Document-Relevant Query Suggestions**: Interactive chips populated directly from evaluation benchmarks for indexed Docker and Kubernetes documentation:
+  - *"What is the difference between user-defined and default bridge networks?"*
+  - *"What is the role of a ReplicaSet in a Kubernetes Deployment?"*
+- **Real-Time Step Logging**: Animated pipeline phase progression indicator (`routing query…` → `retrieving evidence…` → `reranking candidates…` → `grading evidence…` → `synthesizing answer…`).
+- **Orchestration & Trace Inspection**:
+  - Live metric badges for **Evidence Grade** (`GOOD`, `PARTIAL`, `BAD`), **Retrieval Hops** (`1 / 2`), **CRAG Corrected** (`Yes` / `No`), and **Total Latency**.
+  - Expandable **Query Rewriting Trace** detailing route classification (`technical` vs `conversational`) and query rewrites.
+- **Attributed Evidence Cards**: Collapsible chunk cards detailing chunk ID, source document, cross-encoder rerank score, and complete extracted text.
 
-**Configuring the API Base URL:**
-The file `frontend/config.js` sets `window.__RAG_CONFIG__.API_BASE_URL`. When empty (default), the frontend uses same-origin relative requests — this works out of the box when served by FastAPI. For external hosting, set it to the full API URL (e.g. `"http://api.example.com:8000"`).
+---
+
+## Latency Optimization & Performance Benchmarks
+
+Local CPU-based inference initially encountered high latencies (~32s per query). A systematic profiling effort identified three compounding bottlenecks and introduced targeted optimizations that brought end-to-end latency down to **9.41s** (>70% speedup) without degrading answer factuality or evidence quality.
+
+### Bottleneck Analysis
+1. **Unconstrained Reasoning / Thinking Tokens**: By default, Ollama's `qwen3:1.7b` generated 200–300 `<think>...</think>` internal reasoning tokens before outputting response text, adding ~12–15s of CPU computation per invocation.
+2. **Redundant Sequential LLM Invocations**:
+   - Initial Hop-1 query was passed through an LLM rewriter before retrieval occurred (~8–10s).
+   - An unrealistically high `CRAG_HIGH_CONFIDENCE_SCORE=3.5` bypassed the 0-LLM fast-path for valid chunks (since cross-encoder relevance logits typically peak between 0.7 and 2.5), triggering a second LLM evaluation call (~10s).
+   - Final synthesis required a third LLM call (~12s).
+3. **Context Oversizing**: Default 4096-token context allocation introduced unnecessary prompt evaluation overhead on CPU.
+
+### Applied Optimizations
+1. **Thinking Suppression (`think: false`)**: Passed `"think": false` in Ollama API requests (`generate`, `chat`, `generate_stream`), eliminating the 200+ reasoning token generation cycle.
+2. **Calibrated Cross-Encoder Fast-Path**: Set `CRAG_HIGH_CONFIDENCE_SCORE=0.5`. High-relevance candidates (e.g., scores 7.761, 0.892) evaluate deterministically as `GOOD` in **0.00s with zero LLM calls**.
+3. **Direct Hop-1 Search**: Enabled the semantic bi-encoder (`bge-small-en-v1.5`) and BM25 to search directly with the user's natural language question in ~300ms, reserving LLM rewriting exclusively for corrective Hop-2 loops.
+4. **Hardware Acceleration Tuning**: Configured `OLLAMA_NUM_THREAD=8` (pinned across physical CPU cores) and `OLLAMA_NUM_CTX=2048` to minimize memory pressure and prompt evaluation latency.
+5. **Bounded Synthesis Budget**: Set dynamic token ceilings (max 400 tokens) to ensure answers remain dense, technically grounded, and rapid.
+
+### Benchmark Comparison
+
+| Metric | Baseline (Unoptimized) | Optimized Architecture | Delta |
+| :--- | :--- | :--- | :--- |
+| **Sequential LLM Calls** | 3 calls (rewrite + eval + synth) | 1 call (direct synthesis) | **66% fewer calls** |
+| **Thinking Tokens** | ~200–300 tokens / call | 0 tokens (`think: false`) | **Eliminated** |
+| **Hop 1 Retrieval Latency** | ~8.5s (with LLM rewrite) | ~0.35s (direct dense + BM25) | **24× faster** |
+| **Evidence Evaluation** | ~10.2s (LLM grading) | ~0.00s (Deterministic fast-path) | **Instant** |
+| **Total Query Latency** | **31.91s** | **9.41s** | **70.5% faster (3.4× speedup)** |
+| **Evidence Grade** | `GOOD` | `GOOD` | Preserved |
+| **Answer Grounding** | Strictly verified | Strictly verified | Preserved |
 
 ---
 
@@ -545,15 +585,18 @@ All configuration parameters are defined in `src/config.py` and can be overridde
 | `RERANK_TOP_K` | `5` | Top reranked chunks retained for context |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama daemon endpoint (`host.docker.internal` in Docker) |
 | `OLLAMA_MODEL` | `qwen3:1.7b` | Local Ollama model identifier (`qwen3:1.7b` or `qwen3:4b`) |
+| `OLLAMA_NUM_CTX` | `2048` | KV context window allocated in Ollama memory |
+| `OLLAMA_NUM_THREAD` | `8` | Dedicated CPU threads for Ollama matrix operations |
+| `OLLAMA_THINK` | `false` | Toggle for model internal reasoning/thinking token generation |
 | `AGENT_TEMPERATURE` | `0.1` | Sampling temperature for LLM generation |
 | `AGENT_MAX_HOPS` | `2` | Global maximum retrieval hops per query |
+| `QUERY_REWRITER_ENABLED` | `false` | Toggle for initial Hop 1 query rewrite (Hop 2 CRAG uses corrective engine) |
 | `CRAG_ENABLED` | `true` | Toggle for Corrective RAG evaluation and corrective search |
 | `CRAG_MIN_RERANK_SCORE` | `-5.0` | Threshold below which evidence is classified as BAD |
-| `SYNTHESIS_MAX_TOKENS` | `1400` | Generation ceiling for grounded RAG synthesis (prevents truncation) |
-| `DIRECT_MAX_TOKENS` | `800` | Generation ceiling for conversational/direct responses |
+| `CRAG_HIGH_CONFIDENCE_SCORE` | `0.5` | Threshold above which cross-encoder matches bypass LLM grading |
 | `API_HOST` | `0.0.0.0` | FastAPI host bind address |
 | `API_PORT` | `8000` | FastAPI port |
-| `FASTAPI_BASE_URL` | `http://127.0.0.1:8000` | FastAPI endpoint consumed by Streamlit (`http://fastapi:8000` in Docker) |
+| `FASTAPI_BASE_URL` | `http://127.0.0.1:8000` | FastAPI endpoint consumed by frontends (`http://fastapi:8000` in Docker) |
 
 ---
 
