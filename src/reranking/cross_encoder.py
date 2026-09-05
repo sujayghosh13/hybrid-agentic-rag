@@ -59,7 +59,10 @@ class CrossEncoderReranker:
         pairs = [(query.strip(), cand.text) for cand in candidates]
 
         # Compute cross-attention relevance scores
-        raw_scores = self.model.predict(pairs)
+        try:
+            raw_scores = self.model.predict(pairs, show_progress_bar=False)
+        except TypeError:
+            raw_scores = self.model.predict(pairs)
         if isinstance(raw_scores, (int, float)):
             scores = [float(raw_scores)]
         elif isinstance(raw_scores, np.ndarray):

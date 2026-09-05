@@ -43,7 +43,7 @@ class DenseRetriever:
         else:
             try:
                 logger.info(f"Connecting to Qdrant server at {settings.qdrant_url}...")
-                self.client = QdrantClient(url=settings.qdrant_url, timeout=2.0)
+                self.client = QdrantClient(url=settings.qdrant_url, timeout=10.0)
                 # Verify server connectivity
                 self.client.get_collections()
             except Exception as e:
@@ -146,7 +146,9 @@ class DenseRetriever:
         if not query.strip():
             return []
 
-        query_vector = self.embedder.encode(query, convert_to_numpy=True).tolist()
+        query_vector = self.embedder.encode(
+            query, convert_to_numpy=True, show_progress_bar=False
+        ).tolist()
 
         # Handle qdrant-client versions API (v1.10+ uses query_points, earlier used search)
         try:

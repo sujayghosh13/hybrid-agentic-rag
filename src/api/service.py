@@ -84,6 +84,29 @@ class RAGService:
             performance=performance,
         )
 
+    async def query_stream(self, question: str):
+        """Execute a user query and yield Server-Sent Events with progress and token chunks."""
+        import json
+        clean_question = question.strip()
+        response: AgentResponse = await asyncio.to_thread(self.agent.run, clean_question)
+        
+        # Yield orchestration metadata event
+        meta = {
+            "retrieval_needed": response.retrieval_needed,
+            "hops_executed": response.hops_executed,
+            "sources_count": len(response.sources),
+        }
+        yield f"event: metadata\ndata: {json.dumps(meta)}\n\n"
+
+        # Stream token chunks
+        words = response.answer.split(" ")
+        for i, word in enumerate(words):
+            chunk = word if i == len(words) - 1 else word + " "
+            yield f"event: token\ndata: {json.dumps({'token': chunk})}\n\n"
+            await asyncio.sleep(0.005)
+
+        yield f"event: done\ndata: {json.dumps({'status': 'completed', 'answer': response.answer})}\n\n"
+
     async def check_readiness(self) -> ReadinessStatus:
         """Lightweight readiness checks for local files and Ollama service."""
         # 1. Check BM25 index file

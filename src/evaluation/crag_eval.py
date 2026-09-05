@@ -33,7 +33,11 @@ class CRAGEvaluator:
             total_hops += resp.hops_executed
 
             # Grade distribution
-            final_grade = resp.final_evidence_grade.value if resp.final_evidence_grade else "UNKNOWN"
+            final_grade = (
+                resp.final_evidence_grade.value
+                if hasattr(resp.final_evidence_grade, "value")
+                else (str(resp.final_evidence_grade) if resp.final_evidence_grade else "UNKNOWN")
+            )
             grade_dist[final_grade] = grade_dist.get(final_grade, 0) + 1
 
             # Correction triggers
@@ -47,7 +51,7 @@ class CRAGEvaluator:
                     # Sources recall after Hop 2
                     final_source_ids = [s.get("chunk_id", "") for s in resp.sources]
                     hop1_rel = resp.hop_traces[0].reranked_chunks_added > 0
-                    gain = 1.0 if (resp.final_evidence_grade and resp.final_evidence_grade.value == "GOOD") else 0.0
+                    gain = 1.0 if final_grade == "GOOD" else 0.0
                     evidence_gains.append(gain)
 
                 # Successful correction: started PARTIAL/BAD and reached GOOD

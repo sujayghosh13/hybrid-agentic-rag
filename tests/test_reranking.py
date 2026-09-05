@@ -157,3 +157,16 @@ def test_empty_and_edge_cases(sample_candidates):
 
     with pytest.raises(ValueError, match="top_k must be a positive integer"):
         reranker.rerank(query="test", candidates=sample_candidates, top_k=-1)
+
+
+def test_reranker_candidate_count_tuning(sample_candidates):
+    """Verify reranker properly slices dynamic candidate pools (e.g. 10, 15, 20 candidates)."""
+    mock_model = MockCrossEncoder()
+    reranker = CrossEncoderReranker(model=mock_model)
+
+    # 15 candidate pool simulation
+    extended_candidates = sample_candidates * 5  # 15 candidates
+    results_5 = reranker.rerank(query="Docker bridge", candidates=extended_candidates, top_k=5)
+    assert len(results_5) == 5
+    assert results_5[0].rerank_rank == 1
+    assert results_5[4].rerank_rank == 5

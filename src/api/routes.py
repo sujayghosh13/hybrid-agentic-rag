@@ -79,3 +79,28 @@ async def query_rag(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while processing the request.",
         )
+
+
+@router.post(
+    "/query/stream",
+    summary="Execute Agentic RAG Query with Streaming Output",
+    description="Stream thought events and synthesized token chunks via Server-Sent Events (SSE).",
+)
+async def query_rag_stream(
+    request: QueryRequest,
+    service: RAGService = Depends(get_rag_service),
+):
+    """Process a user query and stream tokens and status events via SSE."""
+    from fastapi.responses import StreamingResponse
+
+    try:
+        return StreamingResponse(
+            service.query_stream(request.question),
+            media_type="text/event-stream",
+        )
+    except Exception as e:
+        logger.exception(f"Unexpected error during /query/stream execution: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while processing the streaming request.",
+        )

@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 import logging
 import re
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional
 
 import httpx
+import json
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,18 @@ class BaseLLMClient(ABC):
         pass
 
     @abstractmethod
+    def generate_stream(
+        self,
+        prompt: str,
+        system: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stop: Optional[List[str]] = None,
+        **kwargs,
+    ) -> Iterator[str]:
+        pass
+
+    @abstractmethod
     def chat(
         self,
         messages: List[Dict[str, str]],
@@ -94,6 +107,8 @@ class OllamaClient(BaseLLMClient):
         options: Dict[str, Any] = {
             "temperature": temperature if temperature is not None else settings.agent_temperature,
         }
+        if getattr(settings, "ollama_num_ctx", None):
+            options["num_ctx"] = settings.ollama_num_ctx
         if max_tokens is not None:
             options["num_predict"] = max_tokens
         if stop is not None:
@@ -140,6 +155,8 @@ class OllamaClient(BaseLLMClient):
         options: Dict[str, Any] = {
             "temperature": temperature if temperature is not None else settings.agent_temperature,
         }
+        if getattr(settings, "ollama_num_ctx", None):
+            options["num_ctx"] = settings.ollama_num_ctx
         if max_tokens is not None:
             options["num_predict"] = max_tokens
         if stop is not None:
@@ -172,6 +189,55 @@ class OllamaClient(BaseLLMClient):
                 raise
             raise OllamaResponseError(f"Error calling Ollama chat API: {e}") from e
 
+    def generate_stream(
+        self,
+        prompt: str,
+        system: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stop: Optional[List[str]] = None,
+        **kwargs,
+    ) -> Iterator[str]:
+        url = f"{self.base_url}/api/generate"
+        options: Dict[str, Any] = {
+            "temperature": temperature if temperature is not None else settings.agent_temperature,
+        }
+        if getattr(settings, "ollama_num_ctx", None):
+            options["num_ctx"] = settings.ollama_num_ctx
+        if max_tokens is not None:
+            options["num_predict"] = max_tokens
+        if stop is not None:
+            options["stop"] = stop
+
+        payload: Dict[str, Any] = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": True,
+            "options": options,
+        }
+        if system:
+            payload["system"] = system
+
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                with client.stream("POST", url, json=payload) as response:
+                    if response.status_code != 200:
+                        raise OllamaResponseError(f"Ollama returned HTTP {response.status_code}")
+                    for line in response.iter_lines():
+                        if line:
+                            data = json.loads(line)
+                            token = data.get("response", "")
+                            if token:
+                                yield token
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            raise OllamaConnectionError(
+                f"Could not connect to Ollama at '{self.base_url}'. Is Ollama running? Error: {e}"
+            ) from e
+        except Exception as e:
+            if isinstance(e, OllamaError):
+                raise
+            raise OllamaResponseError(f"Error streaming from Ollama: {e}") from e
+
 
 class MockOllamaClient(BaseLLMClient):
     """Mock LLM client for deterministic unit testing."""
@@ -203,6 +269,21 @@ class MockOllamaClient(BaseLLMClient):
         if self.response_generator:
             return self.response_generator(prompt)
         return self.default_response
+
+    def generate_stream(
+        self,
+        prompt: str,
+        system: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stop: Optional[List[str]] = None,
+        **kwargs,
+    ) -> Iterator[str]:
+        full_res = self.generate(
+            prompt=prompt, system=system, temperature=temperature, max_tokens=max_tokens, stop=stop, **kwargs
+        )
+        for token in full_res.split(" "):
+            yield token + " "
 
     def chat(
         self,

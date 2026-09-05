@@ -14,9 +14,10 @@ import logging
 import sys
 from pathlib import Path
 
-# Ensure UTF-8 stdout on Windows
+# Ensure UTF-8 stdout and stderr on Windows
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
 # Ensure repository root is in sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -63,7 +64,13 @@ def main():
     output_dir = Path(args.output_dir)
 
     runner = EvaluationRunner(dataset_path=dataset_path)
-    report = runner.run(mode=args.mode)
+    try:
+        report = runner.run(mode=args.mode)
+    except Exception as e:
+        import traceback
+        print("ERROR IN EVALUATION RUNNER:", file=sys.stderr)
+        traceback.print_exc()
+        sys.exit(1)
 
     # 1. Print formatted summary to console
     EvaluationReporter.print_summary(report)

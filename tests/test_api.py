@@ -216,3 +216,21 @@ def test_cors_headers_allowed_origin(client):
         },
     )
     assert response.headers.get("access-control-allow-origin") == "http://localhost:8501"
+
+
+def test_query_stream_endpoint(client, mock_agent):
+    """POST /query/stream must return text/event-stream with metadata and token chunks."""
+    mock_agent.run.return_value = AgentResponse(
+        query="What is Docker bridge?",
+        answer="Docker bridge is a virtual network interface connecting containers.",
+        sources=[],
+        hops_executed=1,
+        retrieval_needed=True,
+    )
+    response = client.post("/query/stream", json={"question": "What is Docker bridge?"})
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers.get("content-type", "")
+    content = response.text
+    assert "event: metadata" in content
+    assert "event: token" in content
+    assert "event: done" in content

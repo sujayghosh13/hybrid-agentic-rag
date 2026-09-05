@@ -44,6 +44,17 @@ class EvidenceEvaluator:
         if not getattr(settings, "crag_enabled", True):
             return EvidenceEvaluation(grade=EvidenceGrade.GOOD, reason="CRAG disabled.")
 
+        # Tier 1B: High-confidence fast-path (0 LLM cost)
+        high_confidence_threshold = getattr(settings, "crag_high_confidence_score", 3.5)
+        if top_score >= high_confidence_threshold:
+            logger.info(
+                f"[Evidence Evaluator] Top score {top_score:.3f} >= {high_confidence_threshold} -> Deterministic GOOD."
+            )
+            return EvidenceEvaluation(
+                grade=EvidenceGrade.GOOD,
+                reason=f"Top rerank score ({top_score:.3f}) exceeds high-confidence threshold ({high_confidence_threshold}).",
+            )
+
         # Tier 2: Structured LLM Grader
         prompt = build_crag_evaluation_prompt(query, context_chunks)
         try:

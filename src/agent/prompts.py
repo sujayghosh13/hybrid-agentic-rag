@@ -43,6 +43,7 @@ GUIDELINES:
 2. If the context does not contain sufficient information to answer the question, clearly state: "Based on the available local documentation, there is insufficient information to answer this question." Do NOT invent or hallucinate information.
 3. Be clear, direct, and technically precise.
 4. When relevant, reference specific configuration details, commands, or concepts found in the context.
+5. Provide the factual answer directly and concisely. Do not repeat the question or include chain-of-thought scratchpad text.
 """
 
 
@@ -70,7 +71,7 @@ def build_sufficiency_prompt(query: str, context_chunks: List[RerankedResult]) -
     )
 
 
-def format_context_blocks(chunks: List[RerankedResult], max_chars_per_chunk: int = 1500) -> str:
+def format_context_blocks(chunks: List[RerankedResult], max_chars_per_chunk: int = 900) -> str:
     """Format re-ranked context chunks into structured, numbered blocks."""
     if not chunks:
         return "No relevant context found."

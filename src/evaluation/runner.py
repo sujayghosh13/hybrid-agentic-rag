@@ -109,7 +109,13 @@ class EvaluationRunner:
 
         if mode == "full":
             logger.info("Executing FULL mode with LocalQwenAgent orchestration...")
-            agent = LocalQwenAgent()
+            from src.agent.tools import HybridSearchTool, RerankTool
+            search_tool = HybridSearchTool(retriever=retrieval_evaluator.hybrid_retriever)
+            rerank_tool = RerankTool(reranker=retrieval_evaluator.reranker)
+            agent = LocalQwenAgent(
+                hybrid_search_tool=search_tool,
+                rerank_tool=rerank_tool,
+            )
             agent_responses = []
 
             for q in queries:
@@ -153,7 +159,11 @@ class EvaluationRunner:
                             reranked_mrr=r_mrr,
                             aspect_coverage=cov,
                             refusal_correct=ref_correct,
-                            crag_grade=resp.final_evidence_grade.value if resp.final_evidence_grade else None,
+                            crag_grade=(
+                                resp.final_evidence_grade.value
+                                if hasattr(resp.final_evidence_grade, "value")
+                                else (str(resp.final_evidence_grade) if resp.final_evidence_grade else None)
+                            ),
                             is_corrected=resp.is_corrected,
                             hops_executed=resp.hops_executed,
                             latency_ms=(q_t1 - q_t0) * 1000.0,

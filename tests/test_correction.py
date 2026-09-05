@@ -137,3 +137,20 @@ def test_models_to_dict():
     assert d_trace["hop_index"] == 1
     assert d_trace["evidence_grade"] == "PARTIAL"
     assert d_trace["candidates_retrieved"] == 20
+
+
+def test_evaluator_high_confidence_fast_path():
+    """Verify that scores >= crag_high_confidence_score bypass the LLM grader and return GOOD directly."""
+    # LLM should never be called; if called, raise an error
+    def should_not_be_called(_):
+        raise AssertionError("LLM grader was invoked despite high-confidence fast-path!")
+
+    mock_llm = MockOllamaClient(response_generator=should_not_be_called)
+    evaluator = EvidenceEvaluator(llm_client=mock_llm)
+
+    # Chunk score = 4.2 >= crag_high_confidence_score (3.5)
+    chunk = _make_dummy_chunk("chunk_1", "Comprehensive Docker bridge networking guide.", score=4.2)
+    result = evaluator.evaluate("How does Docker bridge networking work?", [chunk])
+
+    assert result.grade == EvidenceGrade.GOOD
+    assert "exceeds high-confidence threshold" in (result.reason or "")

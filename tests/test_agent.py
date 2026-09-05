@@ -686,3 +686,113 @@ def test_crag_duplicate_corrective_query_break(mock_tools):
     # Corrective query matches initial query -> breaks before Hop 2 search
     assert response.hops_executed == 1
     assert "already searched" in " ".join(response.thought_process)
+
+
+def test_router_and_rewriter_cache(mock_tools):
+    """Verify that routing and query rewriting decisions are cached to eliminate redundant LLM calls."""
+    search_tool, rerank_tool = mock_tools
+    llm_call_count = {"count": 0}
+
+    def counting_llm(prompt: str) -> str:
+        llm_call_count["count"] += 1
+        if "Optimized Search Keywords:" in prompt:
+            return "specialized custom query"
+        return "RETRIEVE"
+
+    mock_llm = MockOllamaClient(response_generator=counting_llm)
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    # First call: should query router and rewriter
+    r1 = agent.should_retrieve("uncommon obscure syntax")
+    q1 = agent.rewrite_query("uncommon obscure syntax")
+    initial_count = llm_call_count["count"]
+    assert initial_count >= 1
+
+    # Second call with same query (or case variant): must hit cache with 0 new LLM calls
+    r2 = agent.should_retrieve("UNCOMMON obscure syntax")
+    q2 = agent.rewrite_query("UNCOMMON obscure syntax")
+    assert r1 == r2
+    assert q1 == q2
+    assert llm_call_count["count"] == initial_count
+
+
+def test_route_and_rewrite(mock_tools):
+    """Verify unified route_and_rewrite method returns routing flag and search keywords."""
+    search_tool, rerank_tool = mock_tools
+    mock_llm = MockOllamaClient(default_response="docker bridge ip forwarding")
+    agent = LocalQwenAgent(
+        llm_client=mock_llm,
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    # Conversational query
+    retrieve, search_q = agent.route_and_rewrite("hello")
+    assert retrieve is False
+    assert search_q == "hello"
+
+    # Technical query
+    retrieve, search_q = agent.route_and_rewrite("How does Docker bridge ip forwarding work?")
+    assert retrieve is True
+    assert "docker bridge" in search_q.lower()
+
+
+def test_adaptive_max_tokens_calculation(mock_tools):
+    """Verify adaptive max_tokens dynamically scales based on query complexity and context chunks."""
+    search_tool, rerank_tool = mock_tools
+    agent = LocalQwenAgent(
+        llm_client=MockOllamaClient(),
+        hybrid_search_tool=search_tool,
+        rerank_tool=rerank_tool,
+    )
+
+    from src.reranking.models import RerankedResult
+    dummy_chunk = RerankedResult(
+        chunk_id="c1", text="Sample text", source="doc.html",
+        metadata={}, score=1.0, dense_rank=1, sparse_rank=1,
+        rrf_score=0.1, rerank_score=1.0, rerank_rank=1,
+    )
+
+    # Simple question with 1 chunk -> base budget 400
+    t_simple = agent._calculate_adaptive_max_tokens("What is Docker?", [dummy_chunk])
+    assert t_simple == 400
+
+    # Multi-part question -> base + 150 = 550
+    t_complex = agent._calculate_adaptive_max_tokens(
+        "Explain how Docker bridge and host networking compare and what are the differences?",
+        [dummy_chunk],
+    )
+    assert t_complex == 550
+
+    # Multi-part question with 3+ chunks -> base + 150 + 100 = 650
+    t_full = agent._calculate_adaptive_max_tokens(
+        "Explain how Docker bridge and host networking compare?",
+        [dummy_chunk, dummy_chunk, dummy_chunk],
+    )
+    assert t_full == 650
+
+
+def test_ollama_client_num_ctx_option():
+    """Verify that OllamaClient passes configured num_ctx in request options."""
+    from unittest.mock import MagicMock, patch
+    from src.agent.llm import OllamaClient
+    from src.config import settings
+
+    client = OllamaClient(base_url="http://localhost:11434", model="qwen3:1.7b")
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"response": "test response"}
+
+    with patch("httpx.Client.post", return_value=mock_resp) as mock_post:
+        res = client.generate("test prompt")
+        assert res == "test response"
+        assert mock_post.called
+        call_kwargs = mock_post.call_args[1]
+        payload = call_kwargs["json"]
+        assert "options" in payload
+        assert payload["options"].get("num_ctx") == settings.ollama_num_ctx

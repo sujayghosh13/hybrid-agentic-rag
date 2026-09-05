@@ -34,6 +34,7 @@ STRICT GROUNDING & FACTUALITY RULES:
 4. Legacy Flags: Do not use or suggest legacy '--link' as a general solution unless the retrieved evidence specifically requires it.
 5. Insufficient Evidence: If the retrieved evidence does not explain a mechanism for containers on different networks to communicate other than attaching to the same network or publishing ports, explicitly state that the retrieved evidence does not provide for direct cross-network routing.
 6. Technical Precision: Be clear, concise, direct, and technically precise without guessing or speculating.
+7. Output Format: Answer directly, clearly, and concisely. Do not output chain-of-thought scratchpad text or repeat introductory statements.
 """
 
 
@@ -60,12 +61,21 @@ class LocalQwenAgent:
         self.evaluator = evidence_evaluator or EvidenceEvaluator(llm_client=self.llm)
         self.corrective_engine = corrective_action_engine or CorrectiveActionEngine(llm_client=self.llm)
 
+        # In-memory LRU / lookup caches for fast sub-millisecond repeated query processing
+        self._routing_cache: Dict[str, bool] = {}
+        self._rewrite_cache: Dict[Tuple[str, Optional[str]], str] = {}
+
     def should_retrieve(self, query: str) -> bool:
         """Decide if local technical documentation retrieval is required for the query."""
         clean_q = query.strip().lower()
 
+        # Cache check
+        if clean_q in self._routing_cache:
+            return self._routing_cache[clean_q]
+
         # Conversational / greeting heuristic filter
         if clean_q in ("hello", "hi", "hey", "who are you?", "what can you do?", "thanks", "thank you"):
+            self._routing_cache[clean_q] = False
             return False
 
         # Technical domain terms fast-path
@@ -76,6 +86,7 @@ class LocalQwenAgent:
             "image", "config", "ip", "subnet", "gateway", "how", "what", "why"
         )
         if any(kw in clean_q for kw in tech_keywords):
+            self._routing_cache[clean_q] = True
             return True
 
         try:
@@ -88,15 +99,22 @@ class LocalQwenAgent:
             )
             decision = routing_decision.strip().upper()
             logger.info(f"[Agent Routing] Query: '{query}' -> Decision: '{decision}'")
-            return "RETRIEVE" in decision
+            res = "RETRIEVE" in decision
+            self._routing_cache[clean_q] = res
+            return res
         except Exception as e:
             logger.warning(f"Routing classifier encountered error: {e}. Defaulting to RETRIEVE.")
+            self._routing_cache[clean_q] = True
             return True
 
     def rewrite_query(self, query: str, missing_aspect: Optional[str] = None) -> str:
         """Rewrite a user query into concise, high-signal retrieval keywords."""
         if not settings.query_rewriter_enabled:
             return query
+
+        cache_key = (query.strip().lower(), missing_aspect.strip().lower() if missing_aspect else None)
+        if cache_key in self._rewrite_cache:
+            return self._rewrite_cache[cache_key]
 
         prompt = build_rewrite_prompt(query, missing_aspect=missing_aspect)
         try:
@@ -111,11 +129,39 @@ class LocalQwenAgent:
             cleaned = rewritten.strip().strip('"').strip("'").split("\n")[0].strip()
             if cleaned and len(cleaned) > 2:
                 logger.info(f"[Query Rewriter] '{query}' -> '{cleaned}' (missing: '{missing_aspect}')")
+                self._rewrite_cache[cache_key] = cleaned
                 return cleaned
         except Exception as e:
             logger.warning(f"Query rewriter encountered error: {e}. Falling back to original query.")
 
+        self._rewrite_cache[cache_key] = query
         return query
+
+    def route_and_rewrite(self, query: str) -> Tuple[bool, str]:
+        """Unified router and rewriter optimization pass.
+        
+        Determines retrieval requirement and optimal retrieval query in a single unified step,
+        leveraging both routing and rewrite fast-paths and caches.
+        """
+        clean_q = query.strip()
+        needs_retrieval = self.should_retrieve(clean_q)
+        if not needs_retrieval:
+            return False, clean_q
+        rewritten = self.rewrite_query(clean_q)
+        return True, rewritten
+
+    def _calculate_adaptive_max_tokens(self, query: str, context_chunks: List[RerankedResult]) -> int:
+        """Dynamically compute max_tokens based on query complexity and retrieved context size."""
+        # Base budget for concise answers
+        budget = 400
+        # Multi-part or complex questions get additional generation headroom
+        lower_q = query.lower()
+        if any(term in lower_q for term in ("difference", "compare", "steps", "explain how", "how to", "why", "and", "both")):
+            budget += 150
+        # More context blocks warrant slightly higher token limit for comprehensive coverage
+        if len(context_chunks) >= 3:
+            budget += 100
+        return min(budget, 650)
 
     def evaluate_sufficiency(
         self,
@@ -173,8 +219,8 @@ class LocalQwenAgent:
         query = query.strip()
         thought_process.append(f"Received query: '{query}'")
 
-        # Step 1: Query Routing
-        retrieval_needed = self.should_retrieve(query)
+        # Step 1: Query Routing & Rewriting (Unified pass with cache)
+        retrieval_needed, search_query = self.route_and_rewrite(query)
 
         if not retrieval_needed:
             thought_process.append("Query classified as conversational/direct. Generating direct answer.")
@@ -214,7 +260,6 @@ class LocalQwenAgent:
         total_retrieval_hops += 1
         thought_process.append(f"--- Global Retrieval Hop 1/{max_retrieval_hops}: Initial Retrieval ---")
 
-        search_query = self.rewrite_query(query)
         rewritten_queries.append(search_query)
         executed_queries.append(search_query)
 
@@ -416,13 +461,14 @@ class LocalQwenAgent:
         thought_process.append(f"Synthesizing final answer grounded strictly on {len(final_context)} unique context chunks.")
         synthesis_prompt = build_synthesis_prompt(query=query, context_chunks=final_context)
 
+        adaptive_tokens = self._calculate_adaptive_max_tokens(query, final_context)
         try:
             answer = call_llm_generate(
                 self.llm,
                 prompt=synthesis_prompt,
                 system=SYNTHESIS_SYSTEM_PROMPT,
                 temperature=settings.agent_temperature,
-                max_tokens=1400,
+                max_tokens=adaptive_tokens,
             )
         except OllamaConnectionError as e:
             return self._handle_ollama_connection_error(query, e, thought_process, tool_calls, final_context)
