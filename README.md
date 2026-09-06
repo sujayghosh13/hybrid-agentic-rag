@@ -6,38 +6,80 @@ An offline-first local Retrieval-Augmented Generation (RAG) system combining str
 
 ## Table of Contents
 
-- [Overview](#overview)
+- [Capstone Domain Mapping](#capstone-domain-mapping)
+  - [Selected Domain](#selected-domain)
+  - [Business Problem](#business-problem)
+  - [Enterprise Technical Documentation Use Case](#enterprise-technical-documentation-use-case)
+- [Document Sources & Licensing](#document-sources--licensing)
 - [System Architecture](#system-architecture)
   - [End-to-End Reasoning Pipeline](#end-to-end-reasoning-pipeline)
   - [Containerized Deployment Architecture](#containerized-deployment-architecture)
-- [Key Features](#key-features)
-- [Why Hybrid Retrieval & Reranking?](#why-hybrid-retrieval--reranking)
-- [Corrective RAG (CRAG) & Agentic Orchestration](#corrective-rag-crag--agentic-orchestration)
-- [Quantitative Evaluation & Benchmarks](#quantitative-evaluation--benchmarks)
+- [Document Processing](#document-processing)
+- [Chunking Strategy](#chunking-strategy)
+- [Embedding Model](#embedding-model)
+- [Vector Database](#vector-database)
+- [Retrieval Strategy](#retrieval-strategy)
+  - [Why Hybrid Retrieval & Reranking?](#why-hybrid-retrieval--reranking)
+  - [Comparison of Retrieval Components](#comparison-of-retrieval-components)
+- [LLM Used](#llm-used)
+- [Prompt Strategy](#prompt-strategy)
+- [Hallucination Handling](#hallucination-handling)
+  - [Corrective RAG (CRAG) & Agentic Orchestration](#corrective-rag-crag--agentic-orchestration)
+  - [Anti-Hallucination Safeguards](#anti-hallucination-safeguards)
+- [Evaluation Methodology](#evaluation-methodology)
+  - [Benchmark Specifications](#benchmark-specifications)
+  - [Empirical Evaluation Results (Phase 6 Benchmark)](#empirical-evaluation-results-phase-6-benchmark)
+  - [Reranker Impact Analysis](#reranker-impact-analysis)
+  - [End-to-End System Performance & Grounding Stress-Test](#end-to-end-system-performance--grounding-stress-test)
+  - [How to Reproduce Evaluation](#how-to-reproduce-evaluation)
+- [Streamlit Application](#streamlit-application)
+  - [Streamlit Web Interface](#streamlit-web-interface)
+  - [Pixel-Faithful Claude Web UI](#pixel-faithful-claude-web-ui)
 - [REST API Specification](#rest-api-specification)
-- [Streamlit Web Interface](#streamlit-web-interface)
-- [Pixel-Faithful Claude Web UI](#pixel-faithful-claude-web-ui)
 - [Latency Optimization & Performance Benchmarks](#latency-optimization--performance-benchmarks)
 - [Repository Structure](#repository-structure)
 - [Prerequisites](#prerequisites)
 - [Local Development Setup](#local-development-setup)
+- [Quick Start (All Services)](#quick-start-all-services)
 - [Containerized Deployment (Docker Compose)](#containerized-deployment-docker-compose)
 - [Configuration Matrix](#configuration-matrix)
 - [Testing](#testing)
 - [Technical Design Decisions & Engineering Trade-offs](#technical-design-decisions--engineering-trade-offs)
-- [Technical Limitations & Future Work](#technical-limitations--future-work)
+- [Limitations](#limitations)
+- [Future Improvements](#future-improvements)
 - [Project Highlights for Reviewers](#project-highlights-for-reviewers)
 
 ---
 
-## Overview
+## Capstone Domain Mapping
 
-Traditional naive RAG architectures suffer from well-documented failure modes:
-1. **Semantic Search Blindness:** Dense bi-encoders miss exact syntax, specific command flags, and alphanumeric identifiers (e.g., `com.docker.network.bridge.name`).
-2. **Lexical Search Fragility:** Sparse keyword matching (BM25) fails when user queries use synonyms or conceptual paraphrasing.
-3. **Single-Pass Brittleness:** If the initial retrieval step pulls uninformative or incomplete chunks, a standard generator has no mechanism to recover, often producing ungrounded hallucinations.
+This repository is submitted for the **Enterprise Document Intelligence & RAG Assistant** capstone project.
 
-**Hybrid-Agentic-RAG** addresses these challenges in an offline-first local environment. It indexes technical documentation (Docker and Kubernetes) using dual retrieval paths merged via **Reciprocal Rank Fusion (RRF)**, re-evaluates candidates through a **Cross-Encoder reranker**, and orchestrates retrieval through an autonomous agent driven by a local **Qwen3:1.7b** (or **Qwen3:4b**) model via **Ollama**. Incorporating **Corrective RAG (CRAG)** principles and strict factuality synthesis prompts, the agent dynamically evaluates evidence quality, triggers targeted corrective retrieval if information is missing (capped at a strict 2-hop budget), and explicitly refuses to answer or admits evidence limitations when retrieved evidence is insufficient.
+### Selected Domain
+- **Domain:** Technical Documentation Assistant
+- **Corpus:** Official Docker and Kubernetes documentation (specifically Docker networking, bridge drivers, container lifecycle, and Kubernetes Pods, Deployments, and Workload architectures).
+
+### Business Problem
+Modern software, DevOps, and platform engineering teams waste significant productive hours searching across vast, fragmented technical documentation spread over disparate websites, offline manuals, and varied formats (HTML, Markdown, PDFs). When troubleshooting deployment failures, configuring isolated container networks, or verifying orchestration manifests, engineers need immediate, natural-language Q&A. Generic search engines and ungrounded LLMs routinely hallucinate CLI flags, confuse driver defaults, or fabricate routing behaviors—leading to configuration drift, deployment delays, and production outages.
+
+### Enterprise Technical Documentation Use Case
+Containerization and container orchestration (Docker and Kubernetes) serve as the foundation of enterprise cloud infrastructure. Technical documentation in this domain has unique characteristics that challenge standard RAG architectures:
+- **Syntax and Flag Sensitivity:** Questions involve exact commands (e.g., `--network`, `--link`), port mapping arguments (`-p` vs `EXPOSE`), and alphanumeric labels (`com.docker.network.bridge.name`) where semantic search alone frequently fails.
+- **Strict Network Isolation Rules:** Architectural correctness depends on knowing subtle distinctions (e.g., default bridge vs. user-defined bridge DNS resolution) where incorrect answers introduce security vulnerabilities.
+- **Data Privacy & Offline Availability:** Enterprise developers often work in air-gapped environments or restricted internal networks where sending proprietary queries or architecture questions to third-party cloud LLM APIs is prohibited. A local, offline-first assistant provides instant intelligence while preserving data privacy.
+
+---
+
+## Document Sources & Licensing
+
+All documents indexed in this system originate from official, publicly available open-source documentation:
+
+| Document Source | Upstream Repository / Source URL | License |
+| :--- | :--- | :--- |
+| **Docker Documentation** | [https://docs.docker.com](https://docs.docker.com) | Apache License 2.0 |
+| **Kubernetes Documentation** | [https://kubernetes.io/docs/](https://kubernetes.io/docs/) | Creative Commons Attribution 4.0 International (CC BY 4.0) |
+
+> **Confidentiality Notice:** No confidential, proprietary, or private organizational documents are used in this repository or benchmark dataset. All ingested materials consist strictly of public, open-source technical documentation.
 
 ---
 
@@ -130,33 +172,73 @@ flowchart TB
 
 ---
 
-## Key Features
+## Document Processing
 
-- **Structure-Aware Document Ingestion:** Custom document loaders (`.html`, `.md`, `.pdf`) paired with a recursive chunker that respects header hierarchies (`#`, `##`, `###`), tables, and code blocks, embedding breadcrumb paths into chunk metadata.
-- **Hybrid Retrieval (Dense + Sparse):**
-  - **Dense:** Normalized vector embeddings generated via `BAAI/bge-small-en-v1.5` (384-dim) indexed in Qdrant with Cosine distance.
-  - **Sparse:** Okapi BM25 index built using `rank_bm25` over tokenized corpus text.
-  - **Fusion:** Ranked candidate lists are merged via Reciprocal Rank Fusion (RRF, $k=60$).
-- **Cross-Encoder Reranking:** Top-20 RRF candidates are rescored with `cross-encoder/ms-marco-MiniLM-L-6-v2` down to Top-5, attending jointly across query-document token pairs.
-- **Autonomous Agentic Flow:**
-  - **Query Routing:** Heuristic fast-path with LLM classification to divert casual conversational remarks from unnecessary retrieval calls.
-  - **Query Rewriter:** Rewrites ambiguous user prompts into keyword-dense retrieval queries.
-  - **Sufficiency Checker:** Verifies whether retrieved context satisfies all aspects of the query.
-- **Corrective RAG (CRAG) Guardrails:**
-  - Fast-path rerank score threshold (`CRAG_MIN_RERANK_SCORE = -5.0`) combined with prompt-based evidence grading (`GOOD`, `PARTIAL`, `BAD`).
-  - Automated generation of corrective queries targeting missing aspects during Hop 2.
-  - Strict anti-hallucination refusal for ungrounded or out-of-domain queries: *"Based on the available local technical documentation, there is insufficient evidence to answer this question."*
-- **Strict Evidence Grounding & Synthesis Safeguards:**
-  - System prompt enforces zero extrapolation: explicitly differentiates default bridge vs. user-defined networks, respects strict cross-network isolation, and forbids speculative cross-network gateway routing.
-  - Prevents Qwen3 thinking-token truncation via calibrated generation limits: `max_tokens=1400` for grounded RAG synthesis and `max_tokens=800` for direct/conversational responses.
-- **Decoupled API & UI:** Production-style FastAPI backend with structured Pydantic DTOs and a clean Streamlit interface with session history, formatted Markdown code blocks/tables, and reranker score badges displaying signed scores plus relative relevance percentages.
-- **Containerized Deployment Stack:** Multi-service Docker Compose topology with healthchecks, private network bridging, persistent volumes, and host-gateway LLM bridging.
+The ingestion pipeline (`scripts/ingest.py` and `src/ingestion/`) prepares raw, heterogeneous technical documentation into clean, structured chunks:
+- **Multi-Format Document Loaders (`src/ingestion/loaders/`):**
+  - **HTML Loader (`html_loader.py`):** Uses BeautifulSoup4 to strip navigational menus, scripts, footer boilerplates, and ads while retaining section hierarchies (`<h1>`–`<h6>`), code snippets (`<pre>`, `<code>`), and tables.
+  - **Markdown Loader (`markdown_loader.py`):** Parses Markdown syntax into distinct structural document elements, maintaining header levels and code fencing.
+  - **PDF Loader (`pdf_loader.py`):** Uses `pypdf` to extract page-by-page textual content, attaching page number metadata.
+- **Normalization & Cleaning:** Removes repetitive boilerplate, normalizes whitespace, and extracts document breadcrumb paths so every element knows its place in the documentation hierarchy.
 
 ---
 
-## Why Hybrid Retrieval & Reranking?
+## Chunking Strategy
 
-A dual-retriever design addresses the fundamental trade-offs between dense semantic representation and exact lexical matching:
+Standard naive chunking (fixed character slices) breaks code blocks, splits CLI syntax, and detaches headers from explanatory text. This system implements a **Structure-Aware Recursive Chunker** (`src/ingestion/chunker.py`):
+- **Target Chunk Size:** 300–500 tokens with ~15% overlap (`target_overlap_tokens ~ 75 tokens`), using `tiktoken` (`cl100k_base` encoding) with a character/word fallback.
+- **Hierarchy Preservation:** Respects document structural units (`#`, `##`, `###`), tables, and code blocks. Text elements within the same section are grouped until the token limit is reached.
+- **Recursive Splitting for Large Elements:** Oversized paragraphs or tables are recursively partitioned along semantic boundaries in order of preference: paragraph breaks (`\n\n`), line breaks (`\n`), sentence endings (`. `), and words (` `).
+- **Rich Metadata Attachment:** Each chunk maintains complete metadata for downstream tracing and attribution:
+  - `filename`: Source file identifier.
+  - `doc_type`: File format (`html`, `md`, `pdf`).
+  - `section` / `heading`: Hierarchical breadcrumb path.
+  - `page_number`: Page reference (for PDFs).
+  - `chunk_index` / `total_chunks`: Position in the source document.
+  - `token_count` and `char_count`: Exact size metrics.
+
+---
+
+## Embedding Model
+
+- **Model:** `BAAI/bge-small-en-v1.5` (from HuggingFace, executed via `sentence-transformers`).
+- **Embedding Dimensions:** 384 dimensions.
+- **Distance Metric:** Cosine similarity.
+- **Normalization:** Embeddings are L2-normalized upon generation, allowing Cosine similarity to be computed via dot products.
+- **Local Execution:** Model weights are cached locally in `data/cache/`, running completely offline on CPU or GPU without external cloud API dependencies.
+
+---
+
+## Vector Database
+
+- **Engine:** **Qdrant** (`qdrant/qdrant:v1.12.0`), run via containerized Docker Compose service or local binary.
+- **Collection Name:** `hybrid_chunks`.
+- **Vector Configuration:** 384 dimensions, Cosine distance metric.
+- **Payload Indexing:** Each vector point stores the chunk's text, source URI, and all metadata fields (`section`, `heading`, `doc_type`, `chunk_index`, `page_number`).
+- **Persistence:** Persisted in a dedicated named volume (`hybrid_rag_qdrant_storage`), ensuring vectors and payloads survive service restarts.
+
+---
+
+## Retrieval Strategy
+
+### Why Hybrid Retrieval & Reranking?
+
+Technical documentation exposes the core weaknesses of single-path retrieval systems:
+1. **Semantic Search Blindness:** Dense bi-encoders miss exact syntax, specific command flags, and alphanumeric identifiers (e.g., `com.docker.network.bridge.name`).
+2. **Lexical Search Fragility:** Sparse keyword matching (BM25) fails when user queries use synonyms or conceptual paraphrasing.
+3. **Single-Pass Brittleness:** If the initial retrieval step pulls uninformative or incomplete chunks, a standard generator has no mechanism to recover, often producing ungrounded hallucinations.
+
+To solve this, **Hybrid-Agentic-RAG** combines dense semantic retrieval, sparse lexical retrieval, and cross-encoder reranking:
+
+```
+User Query
+    │
+    ├──► Dense Retrieval (bge-small-en-v1.5 in Qdrant) ──► Top 10 Candidates ──┐
+    │                                                                          ├──► Reciprocal Rank Fusion (RRF k=60) ──► Top 20 Candidates ──► Cross-Encoder Reranker (ms-marco-MiniLM-L-6-v2) ──► Top 5 Context Chunks
+    └──► Sparse Retrieval (rank_bm25 Okapi BM25 Index)  ──► Top 10 Candidates ──┘
+```
+
+### Comparison of Retrieval Components
 
 | Approach | Strength | Weakness | Mitigation in this System |
 | :--- | :--- | :--- | :--- |
@@ -167,30 +249,66 @@ A dual-retriever design addresses the fundamental trade-offs between dense seman
 
 ---
 
-## Corrective RAG (CRAG) & Agentic Orchestration
+## LLM Used
 
-The agent executes a deterministic, budget-bounded retrieval lifecycle:
-
-1. **Routing:** Checks if retrieval is needed. If conversational (e.g., greetings), answers directly.
-2. **Hop 1 (Initial Retrieval):**
-   - Rewrites the user query into search keywords.
-   - Retrieves top-20 candidates using Hybrid RRF and reranks them to top-5.
-   - Evaluates evidence quality:
-     - **`GOOD`:** Context is sufficient; proceeds immediately to grounded answer synthesis.
-     - **`PARTIAL`:** Missing specific aspects; triggers Hop 2 corrective retrieval.
-     - **`BAD`:** Irrelevant or out-of-domain; triggers corrective search or immediate refusal.
-3. **Hop 2 (Corrective Retrieval):**
-   - The Corrective Engine generates a targeted query addressing the specific missing aspect.
-   - Performs a second retrieval and rerank pass, merging new unique chunks into the context pool.
-   - Re-evaluates final evidence quality.
-4. **Anti-Hallucination Refusal:**
-   - If the final evidence grade remains `BAD` or the context pool contains no usable chunks, the system strictly outputs the standard refusal rather than guessing.
-5. **Synthesis:**
-   - The model generates an answer strictly constrained by the retrieved chunks, attributing sources by chunk ID.
+- **Model:** Local **Qwen3:1.7b** (with optional support for **Qwen3:4b**).
+- **Runtime:** Served via local **Ollama** daemon (`http://localhost:11434` or `host.docker.internal:11434` inside Docker).
+- **Execution Mode:** Completely offline and self-hosted with zero external API fees or data leakage.
+- **Calibrated Runtime Parameters:**
+  - `AGENT_TEMPERATURE = 0.1`: Minimizes non-deterministic drift and guarantees grounded factual synthesis.
+  - `OLLAMA_NUM_CTX = 2048`: Allocates adequate KV-cache context window for technical chunks.
+  - `OLLAMA_NUM_THREAD = 8`: Dedicated CPU threads pinned for fast matrix calculations.
+  - `OLLAMA_THINK = false`: Bypasses 200+ internal reasoning/scratchpad tokens, eliminating ~12–15s of unnecessary CPU computation per invocation.
 
 ---
 
-## Quantitative Evaluation & Benchmarks
+## Prompt Strategy
+
+The system prompt and task-specific prompts (`src/agent/prompts.py`) enforce strict factuality and negative constraints:
+
+1. **Query Router Prompt (`ROUTER_SYSTEM_PROMPT`):**
+   - Classifies queries into `RETRIEVE` (technical questions requiring documentation) or `DIRECT` (simple greetings and conversational remarks).
+2. **Query Rewriter Prompt (`REWRITE_SYSTEM_PROMPT`):**
+   - Strips conversational filler and produces concise, high-signal keyword queries for dense and BM25 search.
+3. **Evidence Sufficiency Evaluator Prompt (`SUFFICIENCY_SYSTEM_PROMPT`):**
+   - Evaluates retrieved context chunks and returns strictly `SUFFICIENT` or `INSUFFICIENT: <concise missing technical concept>`.
+4. **Grounded Synthesis Prompt (`SYNTHESIS_SYSTEM_PROMPT`):**
+   - **Strict Grounding:** Requires the LLM to base its answer *only* on the provided context blocks.
+   - **Explicit Refusal Instruction:** Instructs the model that if evidence is insufficient, it must output: *"Based on the available local technical documentation, there is insufficient evidence to answer this question."*
+   - **Zero Extrapolation Constraint:** Forbids speculative cross-network routing, enforces default bridge vs. user-defined bridge differences, and respects network isolation boundaries.
+   - **Calibrated Token Budgets:** `max_tokens=1400` for grounded RAG synthesis and `max_tokens=800` for direct/conversational responses, preventing output truncation while eliminating runaway generation.
+
+---
+
+## Hallucination Handling
+
+### Corrective RAG (CRAG) & Agentic Orchestration
+
+The autonomous agent (`src/agent/agent.py`) executes a budget-bounded retrieval and verification lifecycle:
+
+1. **Routing:** Checks if retrieval is needed. If conversational (e.g., greetings), answers directly.
+2. **Hop 1 (Initial Retrieval):**
+   - Searches directly using hybrid RRF and cross-encoder reranking down to Top 5 candidates.
+   - Evaluates evidence quality using a two-tier mechanism:
+     - **Fast-path Confidence:** If the top cross-encoder score exceeds `CRAG_HIGH_CONFIDENCE_SCORE = 0.5`, evidence is deterministically graded `GOOD` in 0.00s with zero LLM calls.
+     - **LLM Evidence Grader:** If below confidence threshold, prompts the LLM to grade evidence as `GOOD`, `PARTIAL`, or `BAD`.
+3. **Hop 2 (Corrective Retrieval):**
+   - If graded `PARTIAL` and under the 2-hop budget, the Corrective Engine extracts the missing aspect and generates a targeted corrective query.
+   - Executes Hop 2 retrieval, deduplicates and merges new chunks into the context pool, and re-evaluates.
+4. **Anti-Hallucination Refusal:**
+   - If the final evidence grade is `BAD` or the top reranker score is below `CRAG_MIN_RERANK_SCORE = -5.0`, or if no usable context is found, the system strictly outputs the standard refusal message rather than guessing.
+5. **Synthesis:**
+   - Synthesizes an answer strictly constrained by the retrieved chunks with source attribution.
+
+### Anti-Hallucination Safeguards
+
+- **Bounded Budget:** Maximum 2 retrieval hops prevent infinite loops and retrieval drift.
+- **Adversarial Trap Resistance:** Validated against known technical trap queries (e.g., asserting that Docker automatically creates cross-bridge routes) with 100% adherence to isolation facts.
+- **Out-of-Domain Refusal:** Queries about topics not present in local documentation (e.g., Kubernetes workloads in a Docker-only query, or general knowledge) trigger deterministic refusal.
+
+---
+
+## Evaluation Methodology
 
 The repository includes a dedicated evaluation framework (`scripts/run_evaluation.py` and `src/evaluation/`).
 
@@ -205,7 +323,7 @@ The repository includes a dedicated evaluation framework (`scripts/run_evaluatio
   - `negative_ood` (3 out-of-domain refusal queries)
 - **Ranking Evaluation:** 15 in-domain queries evaluate ranking metrics against positive ground-truth chunks; 3 out-of-domain queries evaluate refusal accuracy.
 
-### Verified Measured Results (Phase 6 Benchmark)
+### Empirical Evaluation Results (Phase 6 Benchmark)
 
 Below are the empirical evaluation metrics measured from `data/evaluation/results/latest.json`:
 
@@ -216,7 +334,7 @@ Below are the empirical evaluation metrics measured from `data/evaluation/result
 | **Hybrid RRF** ($k=60$) | 0.2000 | 0.4667 | 0.6000 | 0.8000 | 0.3667 | 0.1467 | 0.3912 | 0.3105 |
 | **Hybrid + Cross-Encoder Reranked** | **0.6000** | **0.7333** | **0.8000** | **0.8000** | **0.4778** | **0.2000** | **0.6611** | **0.4683** |
 
-### Reranker Analysis
+### Reranker Impact Analysis
 - **MRR Improvement:** **0.3912 → 0.6611** (+0.2699 delta, **+69.0% relative gain**).
 - **Top-1 Hit Rate:** **0.2000 → 0.6000** (+0.4000 delta, **3x improvement**).
 - **Promotion Rate:** **60.0%** of queries saw their first relevant chunk promoted to a higher rank, with an average rank shift of **+1.73 positions**.
@@ -249,6 +367,29 @@ python scripts/run_evaluation.py --mode fast
 python scripts/run_evaluation.py --mode full
 ```
 Evaluation outputs are exported to `data/evaluation/results/` as both timestamped JSON reports and summary CSV files.
+
+---
+
+## Streamlit Application
+
+The primary interactive user interface is built with **Streamlit** (`src/ui/app.py`), running on port `8501`:
+
+- **System Health Sidebar:** Displays real-time readiness status for BM25, Qdrant, and Ollama with a manual refresh button.
+- **Query Input Form:** Form-bounded text input preventing accidental duplicate submissions.
+- **Synthesized Answer Card:** Formatted markdown response with full technical reasoning, code blocks, and tables.
+- **Orchestration Metadata Expander:** Details retrieval hops executed, CRAG evidence grade (`GOOD`, `PARTIAL`, `BAD`), rewritten queries, and execution latency.
+- **Attributed Sources Cards:** Expandable cards displaying chunk ID, source document path, rerank score, and chunk text.
+- **Session History:** Rolling log of questions and answers with a clear-history option.
+
+### Pixel-Faithful Claude Web UI
+
+In addition to Streamlit, a standalone web interface is available at `http://localhost:3000` (`python -m http.server 3000 --directory frontend`), delivering an exact pixel-faithful implementation of the Claude design system with zero build step, bundler, or external runtime requirements:
+- **Visual & Architectural Design:** Typography (`Space Grotesk`, `IBM Plex Sans`, `IBM Plex Mono`), tailored color palette (`--paper: #EEF1EE`, `--accent: #0B7285`, `--surface: #FBFAF6`), and responsive layout.
+- **Dynamic Pipeline Visualization:** Live SVG flowchart depicting the full reasoning lifecycle (`query → route → hybrid retrieve → grade → answer`) with dashed corrective loop pathways.
+- **Live Health Dashboard:** Real-time readiness indicators polling `GET /health` on page load.
+- **Document-Relevant Query Suggestions:** Interactive chips populated from evaluation benchmarks for indexed Docker and Kubernetes documentation.
+- **Real-Time Step Logging:** Animated pipeline phase progression indicator.
+- **Orchestration & Trace Inspection:** Metric badges for Evidence Grade, Retrieval Hops, CRAG Corrected, and Total Latency.
 
 ---
 
@@ -327,58 +468,24 @@ Executes the agentic RAG reasoning workflow.
 
 ---
 
-## Streamlit Web Interface
-
-The Streamlit UI runs on port `8501`:
-- **System Health Sidebar:** Displays real-time readiness status for BM25, Qdrant, and Ollama with a manual refresh button.
-- **Query Input Form:** Form-bounded text input preventing accidental duplicate submissions.
-- **Synthesized Answer Card:** Formatted markdown response with full reasoning.
-- **Orchestration Metadata Expander:** Details retrieval hops executed, CRAG evidence grade (`GOOD`, `PARTIAL`, `BAD`), rewritten queries, and execution latency.
-- **Attributed Sources Cards:** Expandable cards displaying chunk ID, source document path, rerank score, and chunk text.
-- **Session History:** Rolling log of questions and answers with a clear-history option.
-
----
-
-## Pixel-Faithful Claude Web UI
-
-A standalone web application served at `http://localhost:3000` (`python -m http.server 3000 --directory frontend`), delivering an exact pixel-faithful implementation of the Claude design system with zero build step, bundler, or external runtime requirements.
-
-### Visual & Architectural Design
-- **Single Source of Truth**: Preserves 100% of the Claude design specification — typography (`Space Grotesk`, `IBM Plex Sans`, `IBM Plex Mono`), tailored color palette (`--paper: #EEF1EE`, `--accent: #0B7285`, `--surface: #FBFAF6`), and exact responsive layout.
-- **Dynamic Pipeline Visualization**: Live SVG flowchart depicting the full reasoning lifecycle (`query → route → hybrid retrieve → grade → answer`) with dashed corrective loop pathways.
-- **Live Health Dashboard**: Real-time readiness indicators polling `GET /health` on page load:
-  - Host Ollama status with animated state badge (`ollama reachable`).
-  - Active model identifiers (`qwen3:1.7b`, `bge-small-en-v1.5`, `cross-encoder/ms-marco-MiniLM-L-6-v2`).
-  - Storage readiness (`bm25 index ready`, `qdrant ready`).
-- **Document-Relevant Query Suggestions**: Interactive chips populated directly from evaluation benchmarks for indexed Docker and Kubernetes documentation:
-  - *"What is the difference between user-defined and default bridge networks?"*
-  - *"What is the role of a ReplicaSet in a Kubernetes Deployment?"*
-- **Real-Time Step Logging**: Animated pipeline phase progression indicator (`routing query…` → `retrieving evidence…` → `reranking candidates…` → `grading evidence…` → `synthesizing answer…`).
-- **Orchestration & Trace Inspection**:
-  - Live metric badges for **Evidence Grade** (`GOOD`, `PARTIAL`, `BAD`), **Retrieval Hops** (`1 / 2`), **CRAG Corrected** (`Yes` / `No`), and **Total Latency**.
-  - Expandable **Query Rewriting Trace** detailing route classification (`technical` vs `conversational`) and query rewrites.
-- **Attributed Evidence Cards**: Collapsible chunk cards detailing chunk ID, source document, cross-encoder rerank score, and complete extracted text.
-
----
-
 ## Latency Optimization & Performance Benchmarks
 
 Local CPU-based inference initially encountered high latencies (~32s per query). A systematic profiling effort identified three compounding bottlenecks and introduced targeted optimizations that brought end-to-end latency down to **9.41s** (>70% speedup) without degrading answer factuality or evidence quality.
 
 ### Bottleneck Analysis
-1. **Unconstrained Reasoning / Thinking Tokens**: By default, Ollama's `qwen3:1.7b` generated 200–300 `<think>...</think>` internal reasoning tokens before outputting response text, adding ~12–15s of CPU computation per invocation.
-2. **Redundant Sequential LLM Invocations**:
+1. **Unconstrained Reasoning / Thinking Tokens:** By default, Ollama's `qwen3:1.7b` generated 200–300 `<think>...</think>` internal reasoning tokens before outputting response text, adding ~12–15s of CPU computation per invocation.
+2. **Redundant Sequential LLM Invocations:**
    - Initial Hop-1 query was passed through an LLM rewriter before retrieval occurred (~8–10s).
    - An unrealistically high `CRAG_HIGH_CONFIDENCE_SCORE=3.5` bypassed the 0-LLM fast-path for valid chunks (since cross-encoder relevance logits typically peak between 0.7 and 2.5), triggering a second LLM evaluation call (~10s).
    - Final synthesis required a third LLM call (~12s).
-3. **Context Oversizing**: Default 4096-token context allocation introduced unnecessary prompt evaluation overhead on CPU.
+3. **Context Oversizing:** Default 4096-token context allocation introduced unnecessary prompt evaluation overhead on CPU.
 
 ### Applied Optimizations
-1. **Thinking Suppression (`think: false`)**: Passed `"think": false` in Ollama API requests (`generate`, `chat`, `generate_stream`), eliminating the 200+ reasoning token generation cycle.
-2. **Calibrated Cross-Encoder Fast-Path**: Set `CRAG_HIGH_CONFIDENCE_SCORE=0.5`. High-relevance candidates (e.g., scores 7.761, 0.892) evaluate deterministically as `GOOD` in **0.00s with zero LLM calls**.
-3. **Direct Hop-1 Search**: Enabled the semantic bi-encoder (`bge-small-en-v1.5`) and BM25 to search directly with the user's natural language question in ~300ms, reserving LLM rewriting exclusively for corrective Hop-2 loops.
-4. **Hardware Acceleration Tuning**: Configured `OLLAMA_NUM_THREAD=8` (pinned across physical CPU cores) and `OLLAMA_NUM_CTX=2048` to minimize memory pressure and prompt evaluation latency.
-5. **Bounded Synthesis Budget**: Set dynamic token ceilings (max 400 tokens) to ensure answers remain dense, technically grounded, and rapid.
+1. **Thinking Suppression (`think: false`):** Passed `"think": false` in Ollama API requests (`generate`, `chat`, `generate_stream`), eliminating the 200+ reasoning token generation cycle.
+2. **Calibrated Cross-Encoder Fast-Path:** Set `CRAG_HIGH_CONFIDENCE_SCORE=0.5`. High-relevance candidates evaluate deterministically as `GOOD` in **0.00s with zero LLM calls**.
+3. **Direct Hop-1 Search:** Enabled the semantic bi-encoder (`bge-small-en-v1.5`) and BM25 to search directly with the user's natural language question in ~300ms, reserving LLM rewriting exclusively for corrective Hop-2 loops.
+4. **Hardware Acceleration Tuning:** Configured `OLLAMA_NUM_THREAD=8` (pinned across physical CPU cores) and `OLLAMA_NUM_CTX=2048` to minimize memory pressure and prompt evaluation latency.
+5. **Bounded Synthesis Budget:** Set dynamic token ceilings (max 400 tokens) to ensure answers remain dense, technically grounded, and rapid.
 
 ### Benchmark Comparison
 
@@ -640,13 +747,23 @@ pytest --cov=src tests/
 
 ---
 
-## Technical Limitations & Future Work
+## Limitations
 
 - **Inference Latency:** Local LLM generation (Qwen3:1.7b / Qwen3:4b) and Cross-Encoder reranking introduce execution latency that depends on host CPU/GPU hardware, model parameter size, and the number of agentic hops executed. With GPU offloading, average latency for Qwen3:1.7b is ~12.3s end-to-end.
 - **Benchmark Scope:** The current evaluation set comprises 18 curated queries across 308 document chunks. While valuable for comparative validation, larger-scale benchmarks would further stress-test multi-hop edge cases.
 - **Host-Native Dependency:** The deployment stack is not fully self-contained in Docker alone, as it expects a running Ollama daemon on the host.
 - **Language Scope:** The pre-trained embedding and reranker models (`bge-small-en-v1.5` and `ms-marco-MiniLM-L-6-v2`) are optimized for English; multilingual documentation would require multilingual alternatives.
-- **Offline Knowledge Boundary:** Out-of-domain questions are strictly refused by design. A natural extension is adding optional fallback to privacy-preserving web search for queries outside the local corpus.
+- **Offline Knowledge Boundary:** Out-of-domain questions are strictly refused by design.
+
+---
+
+## Future Improvements
+
+- **Expanded Corpus Coverage:** Ingest full documentation suites for Docker, Kubernetes, Helm, and cloud-native ecosystem projects.
+- **Benchmark Scaling:** Expand the evaluation dataset to 100+ complex multi-concept queries to further benchmark multi-hop retrieval and edge cases.
+- **Multilingual Support:** Integrate multilingual dense embeddings (`bge-m3`) and rerankers for teams working in non-English technical environments.
+- **Privacy-Preserving Web Fallback:** Add an optional, configurable web search fallback for queries confirmed out-of-domain, while preserving offline air-gapped mode by default.
+- **Self-Contained Containerized Inference:** Package an optional all-in-one Compose profile with an embedded vLLM or CPU-quantized runtime for environments without pre-installed host Ollama.
 
 ---
 
