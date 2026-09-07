@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 from src.reranking.models import RerankedResult
 
 
@@ -43,7 +43,20 @@ GUIDELINES:
 2. If the context does not contain sufficient information to answer the question, clearly state: "Based on the available local documentation, there is insufficient information to answer this question." Do NOT invent or hallucinate information.
 3. Be clear, direct, and technically precise.
 4. When relevant, reference specific configuration details, commands, or concepts found in the context.
-5. Provide the factual answer directly and concisely. Do not repeat the question or include chain-of-thought scratchpad text.
+5. Multi-Document Synthesis: When answering questions that require information from multiple documents or sections, synthesize the facts coherently across the sources without making unsupported inferential leaps. Explicitly attribute or connect facts to their respective source documents or components.
+6. Provide the factual answer directly and concisely. Do not repeat the question or include chain-of-thought scratchpad text.
+"""
+
+
+CONVERSATIONAL_REWRITE_SYSTEM_PROMPT = """You are an expert search query reformulation assistant for a technical documentation search system.
+Your job is to reformulate a user's follow-up question into a complete, self-contained search query suitable for hybrid retrieval, using the recent conversation history.
+
+Rules:
+1. Resolve all pronouns, references, and ellipses (e.g., "its lifecycle", "how do I configure it", "what about networking", "show an example of this") using the entities from the conversation history.
+2. If the follow-up question is already complete, standalone, or introduces a new topic (e.g. "What is Docker Swarm?"), preserve the user question as-is without adding unrelated context.
+3. Strip out conversational filler, polite preambles, and conversational framing.
+4. Keep the output focused on core technical terms, concepts, configurations, and commands (applicable across Docker, Kubernetes, and arbitrary uploaded technical documentation).
+5. Output ONLY the standalone search query on a single line. Do NOT provide explanations, quotes, or markdown.
 """
 
 
@@ -61,6 +74,26 @@ def build_rewrite_prompt(query: str, missing_aspect: Optional[str] = None) -> st
     )
 
 
+def build_conversational_rewrite_prompt(
+    query: str,
+    recent_turns: List[Dict[str, str]],
+) -> str:
+    """Build prompt for reformulating a follow-up question using bounded conversation history."""
+    history_lines = []
+    for turn in recent_turns:
+        role = turn.get("role", "user").capitalize()
+        content = turn.get("content", "").strip()
+        history_lines.append(f"{role}: {content}")
+    history_text = "\n".join(history_lines)
+
+    return (
+        f"Recent Conversation History:\n"
+        f"{history_text}\n\n"
+        f"Follow-up Question: {query}\n"
+        f"Standalone Search Query:"
+    )
+
+
 def build_sufficiency_prompt(query: str, context_chunks: List[RerankedResult]) -> str:
     """Build prompt for evaluating context sufficiency."""
     context_text = format_context_blocks(context_chunks, max_chars_per_chunk=800)
@@ -71,7 +104,7 @@ def build_sufficiency_prompt(query: str, context_chunks: List[RerankedResult]) -
     )
 
 
-def format_context_blocks(chunks: List[RerankedResult], max_chars_per_chunk: int = 900) -> str:
+def format_context_blocks(chunks: List[RerankedResult], max_chars_per_chunk: int = 550) -> str:
     """Format re-ranked context chunks into structured, numbered blocks."""
     if not chunks:
         return "No relevant context found."

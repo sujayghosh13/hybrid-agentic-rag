@@ -19,6 +19,13 @@ class HealthResponse(BaseModel):
     models: Dict[str, str]
 
 
+class ChatMessage(BaseModel):
+    """A single message in the conversational history."""
+
+    role: str = Field(description="Role of the sender: 'user' or 'assistant'.")
+    content: str = Field(description="Text content of the message.")
+
+
 class QueryRequest(BaseModel):
     """User query payload."""
 
@@ -29,6 +36,18 @@ class QueryRequest(BaseModel):
         description="The technical question to answer.",
         examples=["How does Docker bridge networking work?"],
     )
+    chat_history: Optional[List[ChatMessage]] = Field(
+        default_factory=list,
+        description="Recent conversation turns (at most 1-2 turns).",
+    )
+    filters: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional metadata filters such as doc_type, filename, or section.",
+    )
+    stream: Optional[bool] = Field(
+        default=False,
+        description="Optional flag to stream LLM response tokens.",
+    )
 
     @field_validator("question")
     @classmethod
@@ -37,6 +56,27 @@ class QueryRequest(BaseModel):
         if not stripped:
             raise ValueError("question cannot be empty or whitespace only.")
         return stripped
+
+    @field_validator("chat_history", mode="before")
+    @classmethod
+    def normalize_chat_history(cls, v: Any) -> Any:
+        if not v:
+            return []
+        if isinstance(v, list):
+            normalized = []
+            for item in v:
+                if isinstance(item, dict):
+                    if "role" in item and "content" in item:
+                        normalized.append(item)
+                    elif "question" in item or "answer" in item:
+                        if item.get("question"):
+                            normalized.append({"role": "user", "content": str(item["question"])})
+                        if item.get("answer"):
+                            normalized.append({"role": "assistant", "content": str(item["answer"])})
+                else:
+                    normalized.append(item)
+            return normalized
+        return v
 
 
 class SourceItem(BaseModel):
@@ -73,3 +113,13 @@ class QueryResponse(BaseModel):
     sources: List[SourceItem] = Field(default_factory=list)
     orchestration: OrchestrationMetadata
     performance: PerformanceMetadata
+
+
+class DocumentUploadResponse(BaseModel):
+    """Response returned upon document upload and indexing."""
+
+    status: str = Field(description="Upload and indexing status ('success' or 'skipped').")
+    filename: str = Field(description="Name of the uploaded document.")
+    chunks_indexed: int = Field(description="Number of chunks extracted and indexed from this document.")
+    total_chunks: int = Field(description="Total chunks in the corpus after indexing.")
+    message: str = Field(description="Status description or outcome.")

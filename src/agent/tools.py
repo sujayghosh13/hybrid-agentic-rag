@@ -34,10 +34,23 @@ class HybridSearchTool(BaseTool):
     def __init__(self, retriever: Optional[HybridRetriever] = None):
         self.retriever = retriever or HybridRetriever()
 
-    def execute(self, query: str, top_k: Optional[int] = None) -> List[SearchResult]:
+    def execute(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        filters: Optional[dict] = None,
+    ) -> List[SearchResult]:
         target_k = top_k or settings.rerank_candidates_count
-        logger.info(f"[Tool: hybrid_search] Query: '{query}', Candidate Top-K: {target_k}")
-        return self.retriever.hybrid_search(query=query, top_k=target_k)
+        logger.info(f"[Tool: hybrid_search] Query: '{query}', Candidate Top-K: {target_k}, Filters: {filters}")
+        if filters:
+            try:
+                return self.retriever.hybrid_search(query=query, top_k=target_k, filters=filters)
+            except TypeError:
+                return self.retriever.hybrid_search(query=query, top_k=target_k)
+        try:
+            return self.retriever.hybrid_search(query=query, top_k=target_k)
+        except TypeError:
+            return self.retriever.hybrid_search(query=query, top_k=target_k, filters=None)
 
 
 class RerankTool(BaseTool):

@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List
 
 from src.ingestion.loaders.base import BaseLoader
+from src.ingestion.loaders.docx_loader import DocxLoader
 from src.ingestion.loaders.html_loader import HTMLLoader
 from src.ingestion.loaders.markdown_loader import MarkdownLoader
 from src.ingestion.loaders.pdf_loader import PDFLoader
@@ -10,6 +11,7 @@ LOADERS: List[BaseLoader] = [
     MarkdownLoader(),
     HTMLLoader(),
     PDFLoader(),
+    DocxLoader(),
 ]
 
 

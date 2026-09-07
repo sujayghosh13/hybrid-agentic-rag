@@ -81,8 +81,10 @@ class BaseLLMClient(ABC):
         pass
 
 
+import threading
+
 class OllamaClient(BaseLLMClient):
-    """Client for local Ollama server running Qwen3 / Qwen2.5."""
+    """Client for local Ollama server running Qwen3 / Qwen2.5 with persistent connection pooling."""
 
     def __init__(
         self,
@@ -93,6 +95,39 @@ class OllamaClient(BaseLLMClient):
         self.base_url = (base_url or settings.ollama_base_url).rstrip("/")
         self.model = model or settings.ollama_model
         self.timeout = timeout
+        self._client: Optional[httpx.Client] = None
+        self._client_lock = threading.Lock()
+
+    @property
+    def http_client(self) -> httpx.Client:
+        """Get or lazily initialize a persistent thread-safe httpx.Client with connection pooling."""
+        if self._client is None or self._client.is_closed:
+            with self._client_lock:
+                if self._client is None or self._client.is_closed:
+                    limits = httpx.Limits(
+                        max_keepalive_connections=10,
+                        max_connections=20,
+                        keepalive_expiry=60.0,
+                    )
+                    self._client = httpx.Client(
+                        timeout=self.timeout,
+                        limits=limits,
+                    )
+        return self._client
+
+    def close(self) -> None:
+        """Close persistent HTTP client connections."""
+        if self._client is not None and not self._client.is_closed:
+            try:
+                self._client.close()
+            except Exception:
+                pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
     def generate(
         self,
@@ -115,28 +150,31 @@ class OllamaClient(BaseLLMClient):
             options["num_predict"] = max_tokens
         if stop is not None:
             options["stop"] = stop
+        options["think"] = getattr(settings, "ollama_think", False)
 
         payload: Dict[str, Any] = {
             "model": self.model,
             "prompt": prompt,
             "stream": False,
             "think": getattr(settings, "ollama_think", False),
+            "keep_alive": getattr(settings, "ollama_keep_alive", "60m"),
             "options": options,
         }
         if system:
             payload["system"] = system
 
+        request_timeout = kwargs.get("timeout", self.timeout)
+
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.post(url, json=payload)
-                if response.status_code != 200:
-                    raise OllamaResponseError(f"Ollama returned HTTP {response.status_code}: {response.text}")
-                data = response.json()
-                raw_res = data.get("response", "")
-                # If thinking model generated thought but response field is empty, fallback to thinking
-                if not raw_res.strip() and data.get("thinking"):
-                    raw_res = data.get("thinking", "")
-                return clean_llm_response(raw_res)
+            response = self.http_client.post(url, json=payload, timeout=request_timeout)
+            if response.status_code != 200:
+                raise OllamaResponseError(f"Ollama returned HTTP {response.status_code}: {response.text}")
+            data = response.json()
+            raw_res = data.get("response", "")
+            # If thinking model generated thought but response field is empty, fallback to thinking
+            if not raw_res.strip() and data.get("thinking"):
+                raw_res = data.get("thinking", "")
+            return clean_llm_response(raw_res)
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             raise OllamaConnectionError(
                 f"Could not connect to Ollama at '{self.base_url}'. Is Ollama running? Error: {e}"
@@ -166,26 +204,27 @@ class OllamaClient(BaseLLMClient):
             options["num_predict"] = max_tokens
         if stop is not None:
             options["stop"] = stop
+        options["think"] = getattr(settings, "ollama_think", False)
 
         payload: Dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "stream": False,
             "think": getattr(settings, "ollama_think", False),
+            "keep_alive": getattr(settings, "ollama_keep_alive", "60m"),
             "options": options,
         }
 
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.post(url, json=payload)
-                if response.status_code != 200:
-                    raise OllamaResponseError(f"Ollama returned HTTP {response.status_code}: {response.text}")
-                data = response.json()
-                msg = data.get("message", {})
-                content = msg.get("content", "")
-                if not content.strip() and msg.get("thinking"):
-                    content = msg.get("thinking", "")
-                return clean_llm_response(content)
+            response = self.http_client.post(url, json=payload)
+            if response.status_code != 200:
+                raise OllamaResponseError(f"Ollama returned HTTP {response.status_code}: {response.text}")
+            data = response.json()
+            msg = data.get("message", {})
+            content = msg.get("content", "")
+            if not content.strip() and msg.get("thinking"):
+                content = msg.get("thinking", "")
+            return clean_llm_response(content)
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             raise OllamaConnectionError(
                 f"Could not connect to Ollama at '{self.base_url}'. Is Ollama running? Error: {e}"
@@ -216,28 +255,29 @@ class OllamaClient(BaseLLMClient):
             options["num_predict"] = max_tokens
         if stop is not None:
             options["stop"] = stop
+        options["think"] = getattr(settings, "ollama_think", False)
 
         payload: Dict[str, Any] = {
             "model": self.model,
             "prompt": prompt,
             "stream": True,
             "think": getattr(settings, "ollama_think", False),
+            "keep_alive": getattr(settings, "ollama_keep_alive", "60m"),
             "options": options,
         }
         if system:
             payload["system"] = system
 
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                with client.stream("POST", url, json=payload) as response:
-                    if response.status_code != 200:
-                        raise OllamaResponseError(f"Ollama returned HTTP {response.status_code}")
-                    for line in response.iter_lines():
-                        if line:
-                            data = json.loads(line)
-                            token = data.get("response", "")
-                            if token:
-                                yield token
+            with self.http_client.stream("POST", url, json=payload) as response:
+                if response.status_code != 200:
+                    raise OllamaResponseError(f"Ollama returned HTTP {response.status_code}")
+                for line in response.iter_lines():
+                    if line:
+                        data = json.loads(line)
+                        token = data.get("response", "")
+                        if token:
+                            yield token
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             raise OllamaConnectionError(
                 f"Could not connect to Ollama at '{self.base_url}'. Is Ollama running? Error: {e}"

@@ -2,7 +2,7 @@ import logging
 import pickle
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from rank_bm25 import BM25Okapi
 
@@ -74,8 +74,17 @@ class BM25Retriever:
         self.chunks_by_id = data["chunks_by_id"]
         return True
 
-    def search(self, query: str, top_k: int = 10) -> List[SearchResult]:
-        """Perform BM25 sparse keyword search for a given query."""
+    def reload_index(self, source_path: Optional[Path] = None) -> bool:
+        """Reload serialized BM25 index from disk into memory."""
+        return self.load_index(source_path)
+
+    def search(
+        self,
+        query: str,
+        top_k: int = 10,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[SearchResult]:
+        """Perform BM25 sparse keyword search for a given query with optional metadata filtering."""
         if self.bm25 is None:
             if not self.load_index():
                 raise RuntimeError("BM25 index is not loaded or built.")
@@ -91,7 +100,30 @@ class BM25Retriever:
         # Sort descending by score
         scored_indices.sort(key=lambda x: x[1], reverse=True)
 
-        top_hits = scored_indices[:top_k]
+        top_hits = []
+        for idx, score in scored_indices:
+            if filters:
+                chunk_id = self.chunk_ids[idx]
+                chunk_data = self.chunks_by_id.get(chunk_id, {})
+                metadata = (
+                    chunk_data.get("metadata", {})
+                    if isinstance(chunk_data, dict)
+                    else (chunk_data.metadata.to_dict() if hasattr(chunk_data.metadata, "to_dict") else chunk_data.metadata)
+                )
+                match = True
+                for fk, fv in filters.items():
+                    if fv is not None and fv != "":
+                        val = metadata.get(fk) if isinstance(metadata, dict) else getattr(metadata, fk, None)
+                        if val is None:
+                            val = chunk_data.get(fk) if isinstance(chunk_data, dict) else getattr(chunk_data, fk, None)
+                        if val != fv:
+                            match = False
+                            break
+                if not match:
+                    continue
+            top_hits.append((idx, score))
+            if len(top_hits) >= top_k:
+                break
 
         results: List[SearchResult] = []
         for rank, (idx, score) in enumerate(top_hits, start=1):

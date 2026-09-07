@@ -1,3 +1,4 @@
+import concurrent.futures
 import logging
 from typing import List, Optional
 
@@ -22,9 +23,18 @@ class HybridRetriever:
         self.dense_retriever = dense_retriever or DenseRetriever()
         self.sparse_retriever = sparse_retriever or BM25Retriever()
         self.rrf_k = rrf_k
+        self._executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="hybrid-search-worker",
+        )
 
     def close(self) -> None:
         """Close sub-retrievers and release underlying resources."""
+        if hasattr(self, "_executor") and self._executor is not None:
+            try:
+                self._executor.shutdown(wait=False)
+            except Exception:
+                pass
         if hasattr(self, "dense_retriever") and self.dense_retriever is not None:
             self.dense_retriever.close()
 
@@ -34,25 +44,39 @@ class HybridRetriever:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def hybrid_search(self, query: str, top_k: int = settings.retrieval_top_k) -> List[SearchResult]:
-        """Perform hybrid retrieval over dense and sparse indices using Reciprocal Rank Fusion."""
+    def hybrid_search(
+        self,
+        query: str,
+        top_k: int = settings.retrieval_top_k,
+        filters: Optional[dict] = None,
+    ) -> List[SearchResult]:
+        """Perform parallel hybrid retrieval over dense and sparse indices using Reciprocal Rank Fusion."""
         if not query.strip():
             return []
 
         # Retrieve a broader candidate pool from both retrievers to optimize RRF fusion quality
         candidate_k = max(top_k * 2, 20)
 
-        dense_results: List[SearchResult] = []
-        try:
-            dense_results = self.dense_retriever.search(query, top_k=candidate_k)
-        except Exception as e:
-            logger.error(f"Dense retrieval error: {e}", exc_info=True)
+        # Run dense and sparse retrievers concurrently in threadpool to minimize latency
+        def _run_dense():
+            try:
+                return self.dense_retriever.search(query, top_k=candidate_k, filters=filters)
+            except Exception as e:
+                logger.error(f"Dense retrieval error: {e}", exc_info=True)
+                return []
 
-        sparse_results: List[SearchResult] = []
-        try:
-            sparse_results = self.sparse_retriever.search(query, top_k=candidate_k)
-        except Exception as e:
-            logger.error(f"Sparse retrieval error: {e}", exc_info=True)
+        def _run_sparse():
+            try:
+                return self.sparse_retriever.search(query, top_k=candidate_k, filters=filters)
+            except Exception as e:
+                logger.error(f"Sparse retrieval error: {e}", exc_info=True)
+                return []
+
+        future_dense = self._executor.submit(_run_dense)
+        future_sparse = self._executor.submit(_run_sparse)
+
+        dense_results: List[SearchResult] = future_dense.result()
+        sparse_results: List[SearchResult] = future_sparse.result()
 
         fused_results = reciprocal_rank_fusion(
             dense_results=dense_results,

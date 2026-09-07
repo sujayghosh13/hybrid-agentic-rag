@@ -5,10 +5,9 @@ services:
     image: qdrant/qdrant:v1.12.0
     container_name: hybrid_rag_qdrant
     restart: unless-stopped
-    # Port 6333 is kept internal to the Docker network by default.
-    # Uncomment the ports section below only if direct host-side debugging or dashboard access is desired.
-    # ports:
-    #   - "6333:6333"
+    # Exposing port 6333 allows host-side scripts and debugging tools to reach Qdrant
+    ports:
+      - "6333:6333"
     expose:
       - "6333"
       - "6334"
@@ -45,10 +44,12 @@ services:
       - EMBEDDING_MODEL_NAME=BAAI/bge-small-en-v1.5
       - RERANKER_MODEL_NAME=cross-encoder/ms-marco-MiniLM-L-6-v2
       - HF_HOME=/app/data/cache/huggingface
-      - CORS_ORIGINS=http://localhost:8501,http://127.0.0.1:8501,http://localhost:8000,http://127.0.0.1:8000
+      - CORS_ORIGINS=http://localhost:8501,http://127.0.0.1:8501,http://localhost:8000,http://127.0.0.1:8000,null
     volumes:
       # Explicit data mount for RAG indexes, chunks, and HuggingFace cache
       - ./data:/app/data
+      - ./frontend:/app/frontend
+      - ./src:/app/src
     extra_hosts:
       # Enables Linux container to resolve native Windows host Ollama daemon
       - "host.docker.internal:host-gateway"

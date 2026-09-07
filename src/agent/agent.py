@@ -1,13 +1,15 @@
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from src.agent.llm import BaseLLMClient, OllamaClient, OllamaConnectionError, OllamaError, call_llm_generate
 from src.agent.models import AgentResponse, HopTrace, ToolCall
 from src.agent.prompts import (
+    CONVERSATIONAL_REWRITE_SYSTEM_PROMPT,
     REWRITE_SYSTEM_PROMPT,
     ROUTER_SYSTEM_PROMPT,
     SUFFICIENCY_SYSTEM_PROMPT,
+    build_conversational_rewrite_prompt,
     build_rewrite_prompt,
     build_sufficiency_prompt,
     build_synthesis_prompt,
@@ -64,6 +66,95 @@ class LocalQwenAgent:
         # In-memory LRU / lookup caches for fast sub-millisecond repeated query processing
         self._routing_cache: Dict[str, bool] = {}
         self._rewrite_cache: Dict[Tuple[str, Optional[str]], str] = {}
+        self._conv_rewrite_cache: Dict[Tuple[str, tuple], str] = {}
+
+    def _bound_chat_history(
+        self,
+        chat_history: Optional[List[Dict[str, str]]],
+        max_turns: int = 2,
+        max_chars_per_turn: int = 300,
+    ) -> List[Dict[str, str]]:
+        """Extract and bound recent user/assistant turns to prevent unbounded prompt growth.
+
+        Extracts at most `max_turns` (default 2 turns, i.e. up to 4 messages), and truncates
+        lengthy assistant responses to `max_chars_per_turn` to maintain sub-second latency.
+        """
+        if not chat_history:
+            return []
+
+        normalized: List[Dict[str, str]] = []
+        for item in chat_history:
+            if isinstance(item, dict):
+                if "role" in item and "content" in item:
+                    role = str(item["role"]).strip().lower()
+                    content = str(item["content"]).strip()
+                    if content:
+                        normalized.append({"role": role, "content": content})
+                elif "question" in item or "answer" in item:
+                    if item.get("question"):
+                        normalized.append({"role": "user", "content": str(item["question"]).strip()})
+                    if item.get("answer"):
+                        normalized.append({"role": "assistant", "content": str(item["answer"]).strip()})
+
+        if not normalized:
+            return []
+
+        max_messages = max_turns * 2
+        recent_messages = normalized[-max_messages:]
+
+        bounded: List[Dict[str, str]] = []
+        for msg in recent_messages:
+            content = msg["content"]
+            if msg["role"] == "assistant" and len(content) > max_chars_per_turn:
+                content = content[:max_chars_per_turn] + "..."
+            bounded.append({"role": msg["role"], "content": content})
+
+        return bounded
+
+    def reformulate_conversational_query(
+        self,
+        query: str,
+        chat_history: List[Dict[str, str]],
+    ) -> str:
+        """Reformulate a follow-up query into a self-contained search query using recent conversation history."""
+        if not chat_history:
+            return query
+
+        bounded_history = self._bound_chat_history(
+            chat_history,
+            max_turns=settings.conversational_memory_turns,
+        )
+        if not bounded_history:
+            return query
+
+        history_signature = tuple(
+            (turn.get("role", ""), turn.get("content", "")[:60])
+            for turn in bounded_history
+        )
+        cache_key = (query.strip().lower(), history_signature)
+        if cache_key in self._conv_rewrite_cache:
+            return self._conv_rewrite_cache[cache_key]
+
+        prompt = build_conversational_rewrite_prompt(query, bounded_history)
+        try:
+            rewritten = call_llm_generate(
+                self.llm,
+                prompt=prompt,
+                system=CONVERSATIONAL_REWRITE_SYSTEM_PROMPT,
+                temperature=0.0,
+                max_tokens=60,
+                stop=["\n"],
+            )
+            cleaned = rewritten.strip().strip('"').strip("'").split("\n")[0].strip()
+            if cleaned and len(cleaned) > 2:
+                logger.info(f"[Conversational Memory] '{query}' -> '{cleaned}'")
+                self._conv_rewrite_cache[cache_key] = cleaned
+                return cleaned
+        except Exception as e:
+            logger.warning(f"Conversational query reformulation encountered error: {e}. Falling back to original query.")
+
+        self._conv_rewrite_cache[cache_key] = query
+        return query
 
     def should_retrieve(self, query: str) -> bool:
         """Decide if local technical documentation retrieval is required for the query."""
@@ -83,7 +174,8 @@ class LocalQwenAgent:
             "docker", "kubernetes", "k8s", "bridge", "network", "networking",
             "driver", "container", "pod", "pods", "service", "deployment",
             "daemon", "volume", "port", "ingress", "cluster", "workload",
-            "image", "config", "ip", "subnet", "gateway", "how", "what", "why"
+            "image", "config", "ip", "subnet", "gateway", "how", "what", "why",
+            "its", "their", "this", "that", "lifecycle"
         )
         if any(kw in clean_q for kw in tech_keywords):
             self._routing_cache[clean_q] = True
@@ -109,9 +201,6 @@ class LocalQwenAgent:
 
     def rewrite_query(self, query: str, missing_aspect: Optional[str] = None) -> str:
         """Rewrite a user query into concise, high-signal retrieval keywords."""
-        if not settings.query_rewriter_enabled:
-            return query
-
         cache_key = (query.strip().lower(), missing_aspect.strip().lower() if missing_aspect else None)
         if cache_key in self._rewrite_cache:
             return self._rewrite_cache[cache_key]
@@ -137,32 +226,53 @@ class LocalQwenAgent:
         self._rewrite_cache[cache_key] = query
         return query
 
-    def route_and_rewrite(self, query: str) -> Tuple[bool, str]:
+    def route_and_rewrite(
+        self,
+        query: str,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+    ) -> Tuple[bool, str]:
         """Unified router and rewriter optimization pass.
         
         Determines retrieval requirement and optimal retrieval query in a single unified step.
+        If conversation history is provided, reformulates follow-up queries using contextual memory.
         Hop 1 directly leverages the natural language query with semantic bi-encoder embeddings
         and BM25 sparse search for sub-second retrieval. LLM rewriting is reserved for Hop 2
-        corrective loops when initial evidence is evaluated as insufficient.
+        corrective loops or when conversational memory reformulation is required.
         """
         clean_q = query.strip()
         needs_retrieval = self.should_retrieve(clean_q)
         if not needs_retrieval:
             return False, clean_q
+
+        # Conversational memory reformulation for follow-up questions
+        if settings.conversational_memory_enabled and chat_history:
+            reformulated = self.reformulate_conversational_query(clean_q, chat_history)
+            if reformulated:
+                return True, reformulated
+
+        # Standalone question with explicit chat_history list preserves query without rewrite
+        if chat_history is not None and not chat_history:
+            return True, clean_q
+
+        # Standalone Hop 1 query rewriting if explicitly enabled OR if query contains conversational filler
+        if settings.query_rewriter_enabled or any(clean_q.lower().startswith(p) for p in ("tell me about", "can you tell me", "please explain")):
+            rewritten = self.rewrite_query(clean_q)
+            return True, rewritten
+
         return True, clean_q
 
     def _calculate_adaptive_max_tokens(self, query: str, context_chunks: List[RerankedResult]) -> int:
         """Dynamically compute max_tokens based on query complexity and retrieved context size."""
         # Base budget for concise answers
-        budget = 250
+        budget = 400
         # Multi-part or complex questions get additional generation headroom
         lower_q = query.lower()
         if any(term in lower_q for term in ("difference", "compare", "steps", "explain how", "how to", "why", "and", "both")):
-            budget += 100
+            budget += 150
         # More context blocks warrant slightly higher token limit for comprehensive coverage
         if len(context_chunks) >= 3:
-            budget += 50
-        return min(budget, 400)
+            budget += 100
+        return min(budget, 800)
 
     def evaluate_sufficiency(
         self,
@@ -200,7 +310,12 @@ class LocalQwenAgent:
 
         return True, None
 
-    def run(self, query: str) -> AgentResponse:
+    def run(
+        self,
+        query: str,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> AgentResponse:
         """Run the full agentic CRAG workflow with unified global retrieval budget (max 2 hops)."""
         start_time = time.time()
         thought_process: List[str] = []
@@ -220,8 +335,12 @@ class LocalQwenAgent:
         query = query.strip()
         thought_process.append(f"Received query: '{query}'")
 
-        # Step 1: Query Routing & Rewriting (Unified pass with cache)
-        retrieval_needed, search_query = self.route_and_rewrite(query)
+        # Step 1: Query Routing & Rewriting (Unified pass with cache & conversational memory)
+        retrieval_needed, search_query = self.route_and_rewrite(query, chat_history=chat_history)
+        if search_query != query:
+            thought_process.append(
+                f"Conversational Memory: Reformulated query '{query}' -> '{search_query}' based on recent history."
+            )
 
         if not retrieval_needed:
             thought_process.append("Query classified as conversational/direct. Generating direct answer.")
@@ -266,11 +385,11 @@ class LocalQwenAgent:
 
         thought_process.append(f"Invoking 'hybrid_search' for query: '{search_query}' (Top {settings.rerank_candidates_count})")
         try:
-            candidates = self.search_tool.execute(query=search_query, top_k=settings.rerank_candidates_count)
+            candidates = self.search_tool.execute(query=search_query, top_k=settings.rerank_candidates_count, filters=filters)
             tool_calls.append(
                 ToolCall(
                     tool_name="hybrid_search",
-                    arguments={"query": search_query, "top_k": settings.rerank_candidates_count},
+                    arguments={"query": search_query, "top_k": settings.rerank_candidates_count, "filters": filters},
                     result=candidates,
                 )
             )
@@ -366,11 +485,11 @@ class LocalQwenAgent:
                 executed_queries.append(corrective_query)
 
                 try:
-                    corr_candidates = self.search_tool.execute(query=corrective_query, top_k=settings.rerank_candidates_count)
+                    corr_candidates = self.search_tool.execute(query=corrective_query, top_k=settings.rerank_candidates_count, filters=filters)
                     tool_calls.append(
                         ToolCall(
                             tool_name="hybrid_search",
-                            arguments={"query": corrective_query, "top_k": settings.rerank_candidates_count},
+                            arguments={"query": corrective_query, "top_k": settings.rerank_candidates_count, "filters": filters},
                             result=corr_candidates,
                         )
                     )
@@ -460,7 +579,8 @@ class LocalQwenAgent:
 
         # Step 4: Synthesize Final Grounded Answer with LLM
         thought_process.append(f"Synthesizing final answer grounded strictly on {len(final_context)} unique context chunks.")
-        synthesis_prompt = build_synthesis_prompt(query=query, context_chunks=final_context)
+        synthesis_query = search_query if search_query != query else query
+        synthesis_prompt = build_synthesis_prompt(query=synthesis_query, context_chunks=final_context)
 
         adaptive_tokens = self._calculate_adaptive_max_tokens(query, final_context)
         try:
@@ -515,6 +635,8 @@ class LocalQwenAgent:
                 "unique_chunks_used": len(final_context),
                 "hops_executed": total_retrieval_hops,
                 "final_evidence_grade": eval_result.grade.value,
+                "original_query": query,
+                "retrieval_query": search_query,
             },
         )
 
@@ -542,3 +664,147 @@ class LocalQwenAgent:
             thought_process=thought_process,
             metadata={"error": str(error), "ollama_status": "unreachable"},
         )
+
+    def run_stream(
+        self,
+        query: str,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Run agentic RAG workflow and yield real-time events and token chunks."""
+        if not query or not query.strip():
+            yield {"type": "metadata", "retrieval_needed": False, "hops_executed": 0, "sources_count": 0}
+            yield {"type": "token", "token": "Please provide a valid question."}
+            yield {"type": "done", "status": "completed", "answer": "Please provide a valid question."}
+            return
+
+        clean_q = query.strip()
+        retrieval_needed, search_query = self.route_and_rewrite(clean_q, chat_history=chat_history)
+
+        if not retrieval_needed:
+            yield {"type": "metadata", "retrieval_needed": False, "hops_executed": 0, "sources_count": 0}
+            accumulated = []
+            try:
+                if hasattr(self.llm, "generate_stream"):
+                    for tok in self.llm.generate_stream(
+                        clean_q,
+                        system="You are a helpful and polite technical AI assistant.",
+                        max_tokens=800,
+                    ):
+                        accumulated.append(tok)
+                        yield {"type": "token", "token": tok}
+                else:
+                    ans = call_llm_generate(
+                        self.llm,
+                        prompt=clean_q,
+                        system="You are a helpful and polite technical AI assistant.",
+                        max_tokens=800,
+                    )
+                    accumulated.append(ans)
+                    yield {"type": "token", "token": ans}
+                yield {"type": "done", "status": "completed", "answer": "".join(accumulated)}
+            except Exception as e:
+                err_msg = f"Error generating answer: {e}"
+                yield {"type": "token", "token": err_msg}
+                yield {"type": "done", "status": "completed", "answer": err_msg}
+            return
+
+        # Retrieval phase
+        all_chunks_dict: Dict[str, RerankedResult] = {}
+        executed_queries: List[str] = []
+        max_retrieval_hops = min(settings.agent_max_hops, 2)
+        total_retrieval_hops = 1
+
+        executed_queries.append(search_query)
+        try:
+            candidates = self.search_tool.execute(query=search_query, top_k=settings.rerank_candidates_count, filters=filters)
+        except Exception as e:
+            logger.error(f"Error in hybrid search tool: {e}", exc_info=True)
+            candidates = []
+
+        reranked_chunks: List[RerankedResult] = []
+        if candidates:
+            try:
+                reranked_chunks = self.rerank_tool.execute(
+                    query=search_query,
+                    candidates=candidates,
+                    top_k=settings.rerank_top_k,
+                )
+            except Exception as e:
+                logger.error(f"Error in rerank tool: {e}", exc_info=True)
+
+        for chunk in reranked_chunks:
+            all_chunks_dict[chunk.chunk_id] = chunk
+
+        current_context = sorted(all_chunks_dict.values(), key=lambda x: -x.rerank_score)[:settings.rerank_top_k]
+        eval_result = self.evaluator.evaluate(clean_q, current_context)
+
+        # Hop 2 CRAG if needed
+        if eval_result.grade in (EvidenceGrade.PARTIAL, EvidenceGrade.BAD) and total_retrieval_hops < max_retrieval_hops and settings.crag_enabled:
+            corrective_query = self.corrective_engine.generate_corrective_query(clean_q, eval_result)
+            if corrective_query not in executed_queries:
+                total_retrieval_hops += 1
+                executed_queries.append(corrective_query)
+                try:
+                    corr_cands = self.search_tool.execute(query=corrective_query, top_k=settings.rerank_candidates_count, filters=filters)
+                except Exception:
+                    corr_cands = []
+                if corr_cands:
+                    try:
+                        corr_reranked = self.rerank_tool.execute(query=corrective_query, candidates=corr_cands, top_k=settings.rerank_top_k)
+                        for chunk in corr_reranked:
+                            if chunk.chunk_id not in all_chunks_dict or chunk.rerank_score > all_chunks_dict[chunk.chunk_id].rerank_score:
+                                all_chunks_dict[chunk.chunk_id] = chunk
+                    except Exception:
+                        pass
+                current_context = sorted(all_chunks_dict.values(), key=lambda x: -x.rerank_score)[:settings.rerank_top_k]
+                eval_result = self.evaluator.evaluate(clean_q, current_context)
+
+        final_context = sorted(all_chunks_dict.values(), key=lambda x: -x.rerank_score)[:settings.rerank_top_k]
+
+        yield {
+            "type": "metadata",
+            "retrieval_needed": True,
+            "hops_executed": total_retrieval_hops,
+            "sources_count": len(final_context),
+            "sources": [c.to_dict() for c in final_context],
+            "final_evidence_grade": eval_result.grade.value,
+        }
+
+        if not final_context or eval_result.grade == EvidenceGrade.BAD:
+            refusal = "Based on the available local technical documentation, there is insufficient evidence to answer this question."
+            yield {"type": "token", "token": refusal}
+            yield {"type": "done", "status": "completed", "answer": refusal}
+            return
+
+        synthesis_query = search_query if search_query != clean_q else clean_q
+        synthesis_prompt = build_synthesis_prompt(query=synthesis_query, context_chunks=final_context)
+        adaptive_tokens = self._calculate_adaptive_max_tokens(clean_q, final_context)
+
+        accumulated_answer = []
+        try:
+            if hasattr(self.llm, "generate_stream"):
+                for tok in self.llm.generate_stream(
+                    prompt=synthesis_prompt,
+                    system=SYNTHESIS_SYSTEM_PROMPT,
+                    temperature=settings.agent_temperature,
+                    max_tokens=adaptive_tokens,
+                ):
+                    accumulated_answer.append(tok)
+                    yield {"type": "token", "token": tok}
+            else:
+                ans = call_llm_generate(
+                    self.llm,
+                    prompt=synthesis_prompt,
+                    system=SYNTHESIS_SYSTEM_PROMPT,
+                    temperature=settings.agent_temperature,
+                    max_tokens=adaptive_tokens,
+                )
+                accumulated_answer.append(ans)
+                yield {"type": "token", "token": ans}
+        except Exception as e:
+            err = f"Error during answer synthesis: {e}"
+            accumulated_answer.append(err)
+            yield {"type": "token", "token": err}
+
+        yield {"type": "done", "status": "completed", "answer": "".join(accumulated_answer)}

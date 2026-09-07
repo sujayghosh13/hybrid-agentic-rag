@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class IngestionPipeline:
     """Orchestrates document loading, structure-aware chunking, and JSONL export."""
 
-    SUPPORTED_EXTENSIONS = {".md", ".markdown", ".html", ".htm", ".pdf"}
+    SUPPORTED_EXTENSIONS = {".md", ".markdown", ".html", ".htm", ".pdf", ".docx"}
 
     def __init__(
         self,

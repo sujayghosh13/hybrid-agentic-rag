@@ -1,15 +1,64 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from src.agent.llm import OllamaConnectionError, OllamaError
 from src.api.dependencies import get_rag_service
-from src.api.schemas import HealthResponse, QueryRequest, QueryResponse
+from src.api.schemas import DocumentUploadResponse, HealthResponse, QueryRequest, QueryResponse
 from src.api.service import RAGService
 from src.config import settings
+from src.ingestion.indexer import DocumentIndexerError, EmptyDocumentError, UnsupportedFileTypeError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.post(
+    "/documents/upload",
+    response_model=DocumentUploadResponse,
+    summary="Upload and index technical document",
+    description="Upload a PDF, Markdown, or HTML document, chunk it, embed it, and update Qdrant and BM25 indexes.",
+    responses={
+        400: {
+            "description": "Unsupported file type or empty document.",
+        },
+        500: {
+            "description": "Internal document processing or indexing error.",
+        },
+    },
+)
+async def upload_document(
+    file: UploadFile = File(...),
+    service: RAGService = Depends(get_rag_service),
+) -> DocumentUploadResponse:
+    """Upload and index a technical document incrementally."""
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Filename cannot be empty.",
+        )
+
+    try:
+        content = await file.read()
+        return await service.upload_and_index(file.filename, content)
+    except (UnsupportedFileTypeError, EmptyDocumentError) as e:
+        logger.warning(f"Document upload validation error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except DocumentIndexerError as e:
+        logger.error(f"Document indexing failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Indexing failed: {str(e)}",
+        )
+    except Exception as e:
+        logger.exception(f"Unexpected error uploading document: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}",
+        )
 
 
 @router.get(
@@ -59,7 +108,16 @@ async def query_rag(
 ) -> QueryResponse:
     """Process a user query through the hybrid agent with CRAG orchestration."""
     try:
-        response = await service.query(request.question)
+        chat_history_dicts = (
+            [{"role": msg.role, "content": msg.content} for msg in request.chat_history]
+            if request.chat_history
+            else None
+        )
+        response = await service.query(
+            request.question,
+            chat_history=chat_history_dicts,
+            filters=request.filters,
+        )
         return response
     except OllamaConnectionError as e:
         logger.error(f"Ollama connection error during /query: {e}")
@@ -94,8 +152,17 @@ async def query_rag_stream(
     from fastapi.responses import StreamingResponse
 
     try:
+        chat_history_dicts = (
+            [{"role": msg.role, "content": msg.content} for msg in request.chat_history]
+            if request.chat_history
+            else None
+        )
         return StreamingResponse(
-            service.query_stream(request.question),
+            service.query_stream(
+                request.question,
+                chat_history=chat_history_dicts,
+                filters=request.filters,
+            ),
             media_type="text/event-stream",
         )
     except Exception as e:

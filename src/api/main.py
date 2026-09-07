@@ -1,5 +1,7 @@
+import asyncio
 from contextlib import asynccontextmanager
 import logging
+from pathlib import Path
 import sys
 
 from fastapi import FastAPI
@@ -17,6 +19,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan manager for startup and shutdown events."""
     logger.info("Initializing Hybrid-Agentic RAG API backend...")
+    # Pre-warm embeddings, reranker, and Ollama so first query is instantaneous
+    try:
+        service = get_rag_service()
+        await asyncio.to_thread(service.warmup)
+    except Exception as e:
+        logger.debug(f"Startup warmup notice: {e}")
     yield
     logger.info("Shutting down Hybrid-Agentic RAG API backend...")
     # Clean up Qdrant client connection if service was initialized
@@ -53,6 +61,20 @@ def create_app() -> FastAPI:
 
     # Include routes
     app.include_router(router)
+
+    # Serve static frontend assets & HTML app
+    frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
+    if frontend_dir.exists():
+        from fastapi.staticfiles import StaticFiles
+        from fastapi.responses import FileResponse
+
+        app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+
+        @app.get("/app", response_class=FileResponse, include_in_schema=False)
+        @app.get("/", response_class=FileResponse, include_in_schema=False)
+        async def serve_frontend():
+            index_file = frontend_dir / "index.html"
+            return FileResponse(index_file)
 
     return app
 

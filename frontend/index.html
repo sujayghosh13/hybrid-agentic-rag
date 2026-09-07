@@ -556,6 +556,138 @@
   }
   .error-card.active{ display: block; }
 
+  /* ---------- upload section ---------- */
+  .upload-dropzone{
+    border: 1px dashed var(--hairline);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 14px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .upload-dropzone:hover, .upload-dropzone.dragover{
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .upload-icon-label{
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--ink);
+    word-break: break-word;
+  }
+  .upload-sub{
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+  .upload-action-btn{
+    width: 100%;
+    margin-top: 8px;
+    background: var(--accent);
+    color: var(--surface);
+    border: none;
+    border-radius: var(--radius);
+    padding: 7px 12px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .upload-action-btn:hover{ opacity: 0.9; }
+  .upload-action-btn:disabled{ opacity: 0.5; cursor: not-allowed; }
+  .upload-status-box{
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    font-size: 0.74rem;
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1.4;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+  }
+  .upload-status-box.success{
+    border-color: var(--good);
+    background: var(--good-bg);
+    color: var(--good);
+  }
+  .upload-status-box.error{
+    border-color: var(--bad);
+    background: var(--bad-bg);
+    color: var(--bad);
+  }
+  .upload-status-box.loading{
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  /* ---------- conversational memory indicator ---------- */
+  .conv-indicator{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    font-size: 0.78rem;
+    margin-bottom: 12px;
+  }
+  .conv-badge{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .conv-text{
+    color: var(--ink-soft);
+    flex: 1;
+    margin-left: 6px;
+  }
+  .conv-clear{
+    background: none;
+    border: none;
+    color: var(--bad);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 2px 4px;
+    text-decoration: underline;
+  }
+
+  /* ---------- metadata filter strip ---------- */
+  .filter-strip{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+  }
+  .filter-label{
+    font-size: 0.74rem;
+    color: var(--ink-soft);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .filter-select{
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.78rem;
+    padding: 4px 8px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    outline: none;
+  }
+  .filter-select:focus{
+    border-color: var(--accent);
+  }
+
   @media (max-width: 860px){
     .shell{ grid-template-columns: 1fr; }
     aside.rail{ border-right: none; border-bottom: 1px solid var(--hairline); }
@@ -608,6 +740,17 @@
       <div class="model-row"><span class="model-key">bm25 index</span><span class="model-val" id="storageBm25">…</span></div>
       <div class="model-row"><span class="model-key">qdrant</span><span class="model-val" id="storageQdrant">…</span></div>
     </div>
+
+    <div class="rail-section">
+      <div class="rail-title">Upload Document</div>
+      <div class="upload-dropzone" id="uploadDropzone" onclick="document.getElementById('docFileInput').click()">
+        <input type="file" id="docFileInput" accept=".pdf,.md,.html,.htm,.markdown,.docx" style="display:none" onchange="onFileSelected(event)">
+        <div class="upload-icon-label" id="uploadIconLabel">📄 Drop PDF, MD, HTML, or DOCX</div>
+        <div class="upload-sub">or click to browse</div>
+      </div>
+      <button class="upload-action-btn" id="uploadActionBtn" style="display:none" onclick="uploadDocumentFile()">Upload & Index</button>
+      <div class="upload-status-box" id="uploadStatusBox" style="display:none"></div>
+    </div>
   </aside>
 
   <main>
@@ -634,9 +777,24 @@
     </section>
 
     <section class="query-panel">
+      <div class="conv-indicator" id="convIndicator" style="display:none">
+        <span class="conv-badge">Follow-up Mode</span>
+        <span class="conv-text" id="convText">Previous turn context active</span>
+        <button class="conv-clear" type="button" onclick="clearConversation()">Clear history</button>
+      </div>
       <label for="q">Ask a technical question about Docker or Kubernetes</label>
       <textarea id="q">How can containers on the same physical host talk to each other without exposing ports to the outside world?</textarea>
       <div class="query-actions">
+        <div class="filter-strip">
+          <span class="filter-label">Filter:</span>
+          <select id="filterDocType" class="filter-select">
+            <option value="">All Formats</option>
+            <option value="pdf">PDF only</option>
+            <option value="html">HTML only</option>
+            <option value="markdown">Markdown only</option>
+            <option value="docx">DOCX only</option>
+          </select>
+        </div>
         <div class="chip-row">
           <button class="chip" type="button" onclick="fillQ(this)">What is the difference between user-defined and default bridge networks?</button>
           <button class="chip" type="button" onclick="fillQ(this)">What is the role of a ReplicaSet in a Kubernetes Deployment?</button>
@@ -688,19 +846,27 @@
 </div>
 
 <script>
-  var API_BASE = 'http://127.0.0.1:8000';
+  var API_BASE = (window.location.port === '8000' || window.location.origin.includes(':8000')) ? '' : 'http://127.0.0.1:8000';
+  var conversationHistory = [];
+  var selectedUploadFile = null;
 
-  /* ---- chip fill (unchanged) ---- */
+  /* ---- chip fill ---- */
   function fillQ(el){
     document.getElementById('q').value = el.textContent;
   }
 
+  /* ---- conversation memory reset ---- */
+  function clearConversation(){
+    conversationHistory = [];
+    document.getElementById('convIndicator').style.display = 'none';
+    document.getElementById('result').classList.remove('active');
+  }
+
   /* ---- health check on load ---- */
-  (function checkHealth(){
+  function checkHealth(){
     fetch(API_BASE + '/health', { signal: AbortSignal.timeout(8000) })
       .then(function(r){ return r.json(); })
       .then(function(d){
-        // Ollama status
         var dot = document.getElementById('ollamaDot');
         var label = document.getElementById('ollamaLabel');
         if(d.readiness && d.readiness.ollama_reachable){
@@ -710,15 +876,12 @@
           dot.classList.add('fail');
           label.textContent = 'ollama unreachable';
         }
-        // API version
         document.getElementById('apiVersion').textContent = 'api v' + (d.version || '0.1.0');
-        // Models
         if(d.models){
           document.getElementById('modelLlm').textContent = d.models.ollama_model || '—';
           document.getElementById('modelEmbed').textContent = d.models.embedding_model || '—';
           document.getElementById('modelReranker').textContent = d.models.reranker_model || '—';
         }
-        // Storage
         if(d.readiness){
           document.getElementById('storageBm25').textContent = d.readiness.bm25_index_ready ? 'ready' : 'not found';
           document.getElementById('storageQdrant').textContent = d.readiness.qdrant_storage_ready ? 'ready' : 'not found';
@@ -729,9 +892,102 @@
         document.getElementById('ollamaLabel').textContent = 'backend unreachable';
         document.getElementById('apiVersion').textContent = 'api offline';
       });
+  }
+  checkHealth();
+
+  /* ---- document upload logic (Phase 1) ---- */
+  function onFileSelected(e){
+    var file = e.target.files && e.target.files[0];
+    if(!file) return;
+    selectedUploadFile = file;
+    document.getElementById('uploadIconLabel').textContent = '📄 ' + file.name;
+    var btn = document.getElementById('uploadActionBtn');
+    btn.style.display = 'block';
+    btn.disabled = false;
+    document.getElementById('uploadStatusBox').style.display = 'none';
+  }
+
+  // Setup drag-and-drop on upload dropzone
+  (function initDropzone(){
+    var dropZone = document.getElementById('uploadDropzone');
+    if(!dropZone) return;
+    ['dragenter', 'dragover'].forEach(function(evt){
+      dropZone.addEventListener(evt, function(e){
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+      });
+    });
+    ['dragleave', 'drop'].forEach(function(evt){
+      dropZone.addEventListener(evt, function(e){
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+      });
+    });
+    dropZone.addEventListener('drop', function(e){
+      if(e.dataTransfer.files && e.dataTransfer.files.length > 0){
+        selectedUploadFile = e.dataTransfer.files[0];
+        document.getElementById('uploadIconLabel').textContent = '📄 ' + selectedUploadFile.name;
+        var btn = document.getElementById('uploadActionBtn');
+        btn.style.display = 'block';
+        btn.disabled = false;
+        document.getElementById('uploadStatusBox').style.display = 'none';
+      }
+    });
   })();
 
-  /* ---- run query (real API call) ---- */
+  function uploadDocumentFile(){
+    if(!selectedUploadFile) return;
+    var btn = document.getElementById('uploadActionBtn');
+    var statusBox = document.getElementById('uploadStatusBox');
+    btn.disabled = true;
+    statusBox.className = 'upload-status-box loading';
+    statusBox.style.display = 'block';
+
+    var stages = ['Extracting text…', 'Creating chunks…', 'Generating embeddings…', 'Updating indexes…'];
+    var si = 0;
+    statusBox.textContent = stages[0];
+    var iv = setInterval(function(){
+      si++;
+      if(si < stages.length){
+        statusBox.textContent = stages[si];
+      }
+    }, 1200);
+
+    var formData = new FormData();
+    formData.append('file', selectedUploadFile);
+
+    fetch(API_BASE + '/documents/upload', {
+      method: 'POST',
+      body: formData
+    })
+    .then(function(r){
+      if(!r.ok){
+        return r.json().catch(function(){ return null; }).then(function(body){
+          throw new Error(body && body.detail ? body.detail : 'HTTP ' + r.status);
+        });
+      }
+      return r.json();
+    })
+    .then(function(data){
+      clearInterval(iv);
+      btn.disabled = false;
+      statusBox.className = 'upload-status-box success';
+      if(data.status === 'skipped'){
+        statusBox.textContent = 'ℹ️ ' + (data.message || 'Already indexed.');
+      } else {
+        statusBox.textContent = '✅ ' + data.filename + ' indexed (' + data.chunks_indexed + ' chunks, total ' + data.total_chunks + ')';
+      }
+      checkHealth();
+    })
+    .catch(function(err){
+      clearInterval(iv);
+      btn.disabled = false;
+      statusBox.className = 'upload-status-box error';
+      statusBox.textContent = '❌ ' + (err.message || 'Indexing failed.');
+    });
+  }
+
+  /* ---- run query (Phase 1 & Phase 2 Conversational RAG) ---- */
   function runQuery(){
     var btn = document.getElementById('askBtn');
     var log = document.getElementById('runLog');
@@ -755,15 +1011,23 @@
       if(i < steps.length){
         log.innerHTML = '<span>›</span> ' + steps[i];
       } else {
-        // Loop on last step until response arrives
         log.innerHTML = '<span>›</span> ' + steps[steps.length - 1];
       }
     }, 800);
 
+    var payload = { question: question };
+    if(conversationHistory.length > 0){
+      payload.chat_history = conversationHistory.slice(-4);
+    }
+    var docTypeFilter = document.getElementById('filterDocType') ? document.getElementById('filterDocType').value : '';
+    if(docTypeFilter){
+      payload.filters = { doc_type: docTypeFilter };
+    }
+
     fetch(API_BASE + '/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: question })
+      body: JSON.stringify(payload)
     })
     .then(function(r){
       if(!r.ok){
@@ -777,7 +1041,18 @@
       clearInterval(iv);
       log.classList.remove('active');
       btn.disabled = false;
-      renderResult(data);
+
+      // Update conversational memory
+      conversationHistory.push({ role: 'user', content: question });
+      var ansText = data.answer || '';
+      var truncatedAns = ansText.length > 300 ? ansText.substring(0, 300) + '...' : ansText;
+      conversationHistory.push({ role: 'assistant', content: truncatedAns });
+
+      var totalTurns = Math.floor(conversationHistory.length / 2);
+      document.getElementById('convText').textContent = 'Turn ' + (totalTurns + 1) + ' (using last ' + Math.min(totalTurns, 2) + ' turn(s) for context)';
+      document.getElementById('convIndicator').style.display = 'flex';
+
+      renderResult(data, question);
     })
     .catch(function(err){
       clearInterval(iv);
@@ -789,7 +1064,7 @@
   }
 
   /* ---- render result from real backend data ---- */
-  function renderResult(data){
+  function renderResult(data, currentQuestion){
     var result = document.getElementById('result');
     var orch = data.orchestration || {};
     var perf = data.performance || {};
@@ -829,12 +1104,16 @@
     traceHtml += '<div class="trace-step"><span class="trace-tag">route</span><div class="trace-body">classified as <strong>' + (orch.retrieval_needed ? 'technical' : 'conversational') + '</strong>'
       + '<code>retrieval_needed = ' + (orch.retrieval_needed ? 'true' : 'false') + '</code></div></div>';
 
-    // Rewrite step (if rewritten queries exist)
+    // Rewrite / Conversational Memory step
     var queries = orch.rewritten_queries || [];
     if(queries.length > 0){
       for(var qi = 0; qi < queries.length; qi++){
-        traceHtml += '<div class="trace-step"><span class="trace-tag">rewrite</span><div class="trace-body">query rewritten for retrieval'
-          + '<code>"' + escapeHtml(queries[qi]) + '"</code></div></div>';
+        var rq = queries[qi];
+        var isMemoryReformulation = (qi === 0 && rq !== currentQuestion && conversationHistory.length > 2);
+        var tag = isMemoryReformulation ? 'memory' : 'rewrite';
+        var desc = isMemoryReformulation ? 'contextual reformulation from recent conversation history' : 'query optimized for hybrid retrieval';
+        traceHtml += '<div class="trace-step"><span class="trace-tag">' + tag + '</span><div class="trace-body">' + desc
+          + '<code>"' + escapeHtml(rq) + '"</code></div></div>';
       }
     }
 

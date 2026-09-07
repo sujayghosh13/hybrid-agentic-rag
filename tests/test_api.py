@@ -23,6 +23,7 @@ def mock_agent():
 def mock_service(mock_agent):
     """Mock RAGService wrapping mock_agent."""
     service = RAGService(agent=mock_agent)
+    service.warmup = lambda: None
     # Stub check_readiness to return true for unit tests
     async def mock_readiness():
         return ReadinessStatus(
@@ -37,10 +38,13 @@ def mock_service(mock_agent):
 @pytest.fixture
 def client(mock_service):
     """TestClient with dependency overrides to isolate the test environment."""
+    from src.api.dependencies import set_rag_service
+    set_rag_service(mock_service)
     app.dependency_overrides[get_rag_service] = lambda: mock_service
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+    set_rag_service(None)
 
 
 # =====================================================================

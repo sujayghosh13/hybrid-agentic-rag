@@ -179,6 +179,7 @@ The ingestion pipeline (`scripts/ingest.py` and `src/ingestion/`) prepares raw, 
   - **HTML Loader (`html_loader.py`):** Uses BeautifulSoup4 to strip navigational menus, scripts, footer boilerplates, and ads while retaining section hierarchies (`<h1>`–`<h6>`), code snippets (`<pre>`, `<code>`), and tables.
   - **Markdown Loader (`markdown_loader.py`):** Parses Markdown syntax into distinct structural document elements, maintaining header levels and code fencing.
   - **PDF Loader (`pdf_loader.py`):** Uses `pypdf` to extract page-by-page textual content, attaching page number metadata.
+  - **DOCX Loader (`docx_loader.py`):** Uses `python-docx` to extract Word documents (`.docx`), preserving hierarchical headings (`Heading 1` through `Heading 6`), ordered breadcrumbs (`heading_stack`), bullet lists, and structured table cell representations.
 - **Normalization & Cleaning:** Removes repetitive boilerplate, normalizes whitespace, and extracts document breadcrumb paths so every element knows its place in the documentation hierarchy.
 
 ---
@@ -191,7 +192,7 @@ Standard naive chunking (fixed character slices) breaks code blocks, splits CLI 
 - **Recursive Splitting for Large Elements:** Oversized paragraphs or tables are recursively partitioned along semantic boundaries in order of preference: paragraph breaks (`\n\n`), line breaks (`\n`), sentence endings (`. `), and words (` `).
 - **Rich Metadata Attachment:** Each chunk maintains complete metadata for downstream tracing and attribution:
   - `filename`: Source file identifier.
-  - `doc_type`: File format (`html`, `md`, `pdf`).
+  - `doc_type`: File format (`html`, `md`, `pdf`, `docx`).
   - `section` / `heading`: Hierarchical breadcrumb path.
   - `page_number`: Page reference (for PDFs).
   - `chunk_index` / `total_chunks`: Position in the source document.
@@ -246,6 +247,27 @@ User Query
 | **Sparse Search** (`rank_bm25`) | Exact keyword matching, identifier sensitivity. | Cannot match semantically paraphrased terms. | Complemented by Dense vector search. |
 | **Reciprocal Rank Fusion (RRF)** | Merges rankings without requiring score normalization. | Does not model deep query-passage token interactions. | Top 20 candidates passed to Cross-Encoder. |
 | **Cross-Encoder Reranking** | Computes full cross-attention over query-document pairs. | Computationally expensive over large corpora. | Applied only to the top 20 pre-filtered candidates. |
+
+### Metadata-Based Retrieval Filtering
+
+The retrieval pipeline supports metadata filtering across all stages (`src/retrieval/dense.py`, `src/retrieval/sparse.py`, `src/retrieval/hybrid.py`, `src/agent/agent.py`, `src/api/routes.py`):
+- **Supported Fields:** `doc_type` (`pdf`, `html`, `md`, `docx`), `filename`, and custom chunk metadata fields.
+- **Dense Vector Search:** Uses native Qdrant `models.Filter` with `FieldCondition` on payloads.
+- **Sparse BM25 Search:** Filters candidate chunk indices using pre-indexed metadata lookups before ranking.
+- **Hybrid Fusion:** Reciprocal Rank Fusion respects metadata constraints uniformly across sparse and dense ranking lists.
+- **API & UI Exposure:** Exposed via `POST /query` payload (`{"filters": {"doc_type": "docx"}}`) and the visual format filter strip in the frontend.
+
+---
+
+## Multi-Document Reasoning & Synthesis
+
+Enterprise technical queries frequently require synthesizing information distributed across multiple guides (e.g., comparing Docker bridge networking against Kubernetes Pod networking namespaces):
+- **Cross-Document Context Formulation:** Up to Top 5 reranked chunks spanning diverse documents are organized into labeled context blocks (`[Document: filename | Section: heading]`).
+- **Synthesis Prompting (`src/agent/prompts.py`):** Explicit synthesis rules require the model to:
+  1. Contrast mechanisms and synthesize evidence across all provided documents.
+  2. Attribute specific statements to their respective sources using document titles or identifiers.
+  3. Never generalize or hallucinate behaviors across boundaries (e.g., keeping Docker bridge network behavior distinct from Kubernetes CNI Pod networking).
+  4. Adhere strictly to facts present in the text, refusing if evidence is missing or conflicting.
 
 ---
 
@@ -365,31 +387,29 @@ python scripts/run_evaluation.py --mode fast
 
 # 2. Full Mode: Complete agentic orchestration, CRAG evaluation, and refusal tests
 python scripts/run_evaluation.py --mode full
+
+# 3. RAGAS Evaluation: Secondary evaluation framework metrics (Context Recall, Precision, Faithfulness)
+python scripts/run_ragas_evaluation.py
+
+# 4. End-to-End Capstone Verification: Live validation across all 7 core workflow steps
+python scripts/verify_final_capstone.py
 ```
-Evaluation outputs are exported to `data/evaluation/results/` as both timestamped JSON reports and summary CSV files.
+Evaluation outputs are exported to `data/evaluation/results/` as timestamped JSON reports, RAGAS results (`ragas_compatible_results.json`), and summary CSV files.
 
 ---
 
-## Streamlit Application
+## Streamlit Application & Canonical Claude UI
 
-The primary interactive user interface is built with **Streamlit** (`src/ui/app.py`), running on port `8501`:
-
-- **System Health Sidebar:** Displays real-time readiness status for BM25, Qdrant, and Ollama with a manual refresh button.
-- **Query Input Form:** Form-bounded text input preventing accidental duplicate submissions.
+The application UI is hosted by **Streamlit** (`src/ui/app.py`), running on port `8501`:
+- **Canonical Design System:** Streamlit serves as the production host while rendering the canonical Claude design system (`frontend/index.html` / `hybrid-rag-frontend.html`) with zero-margin iframe overrides, custom dark aesthetic (`#0E1410`), and responsive layouts.
+- **System Health Sidebar:** Displays real-time readiness status for BM25, Qdrant, and Ollama with a live status indicator.
+- **Document Upload & Indexing Status Panel:** Integrated dropzone and file uploader supporting PDF, Markdown (`.md`), HTML (`.html`), and Word (`.docx`) files. Displays step-by-step progress (`Upload received` → `Extracting text...` → `Creating chunks...` → `Generating embeddings...` → `Updating indexes...` → `✅ Document indexed successfully`), prevents duplicate re-indexing, and immediately makes newly indexed documents searchable through the existing RAG chat interface.
+- **Format Filter Strip:** Allows users to filter retrieval by specific document format (`All Formats`, `PDF only`, `HTML only`, `Markdown only`, `DOCX only`) directly from the search bar.
+- **Query Input & Chips:** Form-bounded text input preventing accidental duplicate submissions, accompanied by document-relevant benchmark query chips.
 - **Synthesized Answer Card:** Formatted markdown response with full technical reasoning, code blocks, and tables.
 - **Orchestration Metadata Expander:** Details retrieval hops executed, CRAG evidence grade (`GOOD`, `PARTIAL`, `BAD`), rewritten queries, and execution latency.
 - **Attributed Sources Cards:** Expandable cards displaying chunk ID, source document path, rerank score, and chunk text.
-- **Session History:** Rolling log of questions and answers with a clear-history option.
-
-### Pixel-Faithful Claude Web UI
-
-In addition to Streamlit, a standalone web interface is available at `http://localhost:3000` (`python -m http.server 3000 --directory frontend`), delivering an exact pixel-faithful implementation of the Claude design system with zero build step, bundler, or external runtime requirements:
-- **Visual & Architectural Design:** Typography (`Space Grotesk`, `IBM Plex Sans`, `IBM Plex Mono`), tailored color palette (`--paper: #EEF1EE`, `--accent: #0B7285`, `--surface: #FBFAF6`), and responsive layout.
-- **Dynamic Pipeline Visualization:** Live SVG flowchart depicting the full reasoning lifecycle (`query → route → hybrid retrieve → grade → answer`) with dashed corrective loop pathways.
-- **Live Health Dashboard:** Real-time readiness indicators polling `GET /health` on page load.
-- **Document-Relevant Query Suggestions:** Interactive chips populated from evaluation benchmarks for indexed Docker and Kubernetes documentation.
-- **Real-Time Step Logging:** Animated pipeline phase progression indicator.
-- **Orchestration & Trace Inspection:** Metric badges for Evidence Grade, Retrieval Hops, CRAG Corrected, and Total Latency.
+- **Conversational Memory Indicator:** Active session banner showing current turn count and sliding window context usage.
 
 ---
 
@@ -419,12 +439,19 @@ Returns service liveness, model configurations, and component readiness indicato
 ```
 
 ### `POST /query`
-Executes the agentic RAG reasoning workflow.
+Executes the agentic RAG reasoning workflow. Supports multi-turn conversational history and metadata filtering.
 
 **Request Payload:**
 ```json
 {
-  "question": "What is the difference between user-defined bridge networks and the default bridge network in Docker?"
+  "question": "What is the difference between user-defined bridge networks and the default bridge network in Docker?",
+  "chat_history": [
+    {"role": "user", "content": "Tell me about Docker bridge drivers."},
+    {"role": "assistant", "content": "Bridge drivers create a private internal network on the host..."}
+  ],
+  "filters": {
+    "doc_type": "html"
+  }
 }
 ```
 
@@ -442,6 +469,7 @@ Executes the agentic RAG reasoning workflow.
       "rerank_score": 3.421,
       "metadata": {
         "source_file": "docker-bridge-network.html",
+        "doc_type": "html",
         "section_title": "Differences between user-defined bridges and the default bridge"
       }
     }
@@ -451,6 +479,7 @@ Executes the agentic RAG reasoning workflow.
     "hops_executed": 1,
     "final_evidence_grade": "GOOD",
     "is_corrected": false,
+    "is_refusal": false,
     "rewritten_queries": [
       "docker user-defined vs default bridge network differences"
     ]
@@ -461,10 +490,48 @@ Executes the agentic RAG reasoning workflow.
 }
 ```
 
+### `GET /query/stream`
+Server-Sent Events (SSE) streaming query endpoint for real-time progressive response delivery.
+
+**Query Parameters:**
+- `q`: Search question string (required).
+- `doc_type`: Optional metadata filter by document type (`pdf`, `html`, `md`, `docx`).
+
+**Streaming Event Format:**
+```
+event: token
+data: {"token": "User"}
+
+event: token
+data: {"token": "-defined"}
+
+event: done
+data: {"status": "complete", "total_tokens": 142}
+```
+
 ### Error Responses
 - `422 Unprocessable Entity`: Raised when `question` is missing, empty, or whitespace only.
 - `503 Service Unavailable`: Raised when the local Ollama daemon is unreachable or times out.
 - `500 Internal Server Error`: Raised on unexpected server-side execution failures.
+
+### `POST /documents/upload`
+Uploads and incrementally indexes a technical document (`.pdf`, `.md`, `.html`, `.docx`) into the Qdrant vector database and BM25 sparse index without collection wiping.
+
+**Request Payload:** Multipart form data with key `file`.
+
+**Illustrative Response (`200 OK`):**
+```json
+{
+  "status": "indexed",
+  "filename": "kubernetes-pod-disruption-budget.pdf",
+  "chunks_indexed": 1,
+  "total_chunks": 309,
+  "message": "Document 'kubernetes-pod-disruption-budget.pdf' indexed successfully (1 chunks created, 309 total in corpus)."
+}
+```
+
+- `400 Bad Request`: Raised on unsupported file formats or empty/unreadable documents.
+- `500 Internal Server Error`: Raised if embedding generation or index writing fails.
 
 ---
 
@@ -698,6 +765,8 @@ All configuration parameters are defined in `src/config.py` and can be overridde
 | `AGENT_TEMPERATURE` | `0.1` | Sampling temperature for LLM generation |
 | `AGENT_MAX_HOPS` | `2` | Global maximum retrieval hops per query |
 | `QUERY_REWRITER_ENABLED` | `false` | Toggle for initial Hop 1 query rewrite (Hop 2 CRAG uses corrective engine) |
+| `CONVERSATIONAL_MEMORY_ENABLED` | `true` | Toggle for conversational history reformulation on follow-up questions |
+| `CONVERSATIONAL_MEMORY_TURNS` | `2` | Maximum number of recent conversation turns (user/assistant) sent to rewriter |
 | `CRAG_ENABLED` | `true` | Toggle for Corrective RAG evaluation and corrective search |
 | `CRAG_MIN_RERANK_SCORE` | `-5.0` | Threshold below which evidence is classified as BAD |
 | `CRAG_HIGH_CONFIDENCE_SCORE` | `0.5` | Threshold above which cross-encoder matches bypass LLM grading |

@@ -453,3 +453,97 @@ def render_error(error: Exception) -> None:
         st.error(f"**Server Error**: {error.message}")
     else:
         st.error(f"**Unexpected Error**: {str(error)}")
+
+
+def render_upload_section(client=None) -> None:
+    """Render the Document Upload section in the sidebar with live indexing status."""
+    with st.sidebar:
+        st.markdown(
+            """
+            <div class="har-sidebar-panel" style="margin-top: 16px;">
+                <div class="har-sidebar-section-title">UPLOAD DOCUMENTS</div>
+                <div style="font-size: 11px; color: var(--har-text-secondary); margin-bottom: 8px;">
+                    Supported: PDF, Markdown (.md), HTML (.html)
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        uploaded_file = st.file_uploader(
+            "Choose PDF / MD / HTML files",
+            type=["pdf", "md", "markdown", "html", "htm"],
+            key="doc_uploader",
+            label_visibility="collapsed",
+            help="Select a technical documentation file (PDF, MD, or HTML) to index.",
+        )
+
+        if uploaded_file is not None:
+            if st.button("INDEX DOCUMENT", use_container_width=True, key="btn_index_doc"):
+                from src.ingestion.indexer import (
+                    DocumentIndexer,
+                    DocumentIndexerError,
+                    EmptyDocumentError,
+                    UnsupportedFileTypeError,
+                )
+
+                status_container = st.status(f"Indexing '{uploaded_file.name}'...", expanded=True)
+
+                def on_progress_step(msg: str) -> None:
+                    status_container.write(msg)
+
+                try:
+                    indexer = DocumentIndexer()
+                    result = indexer.index_uploaded_file(
+                        filename=uploaded_file.name,
+                        content=uploaded_file.getvalue(),
+                        on_progress=on_progress_step,
+                    )
+
+                    if result["status"] == "skipped":
+                        status_container.update(
+                            label="⚠️ Document already indexed",
+                            state="complete",
+                            expanded=False,
+                        )
+                        st.info(result["message"])
+                    else:
+                        status_container.update(
+                            label="✅ Document indexed successfully",
+                            state="complete",
+                            expanded=False,
+                        )
+                        st.success(
+                            f"**{html.escape(result['filename'])}** indexed successfully!\n\n"
+                            f"Added **{result['chunks_indexed']}** chunks (Total: **{result['total_chunks']}**)."
+                        )
+
+                    # Refresh health status if client available
+                    if client and hasattr(st, "session_state"):
+                        try:
+                            from src.ui.app import fetch_system_health
+                            fetch_system_health(client)
+                        except Exception:
+                            pass
+
+                except (UnsupportedFileTypeError, EmptyDocumentError) as e:
+                    status_container.update(
+                        label="❌ Validation failed",
+                        state="error",
+                        expanded=True,
+                    )
+                    st.error(f"**Validation error**: {str(e)}")
+                except DocumentIndexerError as e:
+                    status_container.update(
+                        label="❌ Indexing failed",
+                        state="error",
+                        expanded=True,
+                    )
+                    st.error(f"**Indexing error**: {str(e)}")
+                except Exception as e:
+                    status_container.update(
+                        label="❌ Unexpected error",
+                        state="error",
+                        expanded=True,
+                    )
+                    st.error(f"**Unexpected error**: {str(e)}")

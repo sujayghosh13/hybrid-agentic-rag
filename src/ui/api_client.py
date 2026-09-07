@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -84,17 +84,28 @@ class RAGApiClient:
                 raise
             raise RAGClientError(f"Unexpected error checking API health: {e}") from e
 
-    def query_rag(self, question: str) -> Dict[str, Any]:
+    def query_rag(
+        self,
+        question: str,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Query POST /query to execute the agentic RAG pipeline.
 
         Args:
             question: Technical question string.
+            chat_history: Optional recent conversation turns (at most 1-2 turns).
+            filters: Optional metadata filters (e.g. doc_type, filename).
 
         Returns:
             Dict containing 'question', 'answer', 'sources', 'orchestration', 'performance'.
         """
         url = f"{self.base_url}/query"
-        payload = {"question": question}
+        payload: Dict[str, Any] = {"question": question}
+        if chat_history:
+            payload["chat_history"] = chat_history
+        if filters:
+            payload["filters"] = filters
 
         try:
             with httpx.Client(timeout=self.timeout) as client:
@@ -159,3 +170,65 @@ class RAGApiClient:
             if isinstance(e, RAGClientError):
                 raise
             raise RAGClientError(f"Unexpected error querying RAG API: {e}") from e
+
+    def upload_document(self, filename: str, file_bytes: bytes) -> Dict[str, Any]:
+        """Upload and index a document via POST /documents/upload.
+
+        Args:
+            filename: Name of the file (e.g., 'docker-compose.md').
+            file_bytes: Raw bytes of the document.
+
+        Returns:
+            Dict containing 'status', 'filename', 'chunks_indexed', 'total_chunks', 'message'.
+        """
+        url = f"{self.base_url}/documents/upload"
+        files = {"file": (filename, file_bytes)}
+
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                res = client.post(url, files=files)
+
+                if res.status_code == 200:
+                    return res.json()
+
+                if res.status_code == 400:
+                    detail = "Invalid file or unsupported format."
+                    try:
+                        detail = res.json().get("detail", detail)
+                    except Exception:
+                        pass
+                    raise APIValidationError(
+                        f"Document validation error: {detail}",
+                        details=str(detail),
+                    )
+
+                if res.status_code == 500:
+                    detail = "Indexing failed on server."
+                    try:
+                        detail = res.json().get("detail", detail)
+                    except Exception:
+                        pass
+                    raise APIServerError(
+                        f"Server error during indexing: {detail}",
+                        details=str(detail),
+                    )
+
+                raise APIServerError(
+                    f"Unexpected HTTP status {res.status_code} during document upload.",
+                    details=res.text,
+                )
+
+        except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+            raise APIConnectionError(
+                f"Could not connect to FastAPI backend at '{self.base_url}'.",
+                details=str(e),
+            ) from e
+        except httpx.TimeoutException as e:
+            raise APITimeoutError(
+                "Document upload/indexing timed out after 60 seconds.",
+                details=str(e),
+            ) from e
+        except Exception as e:
+            if isinstance(e, RAGClientError):
+                raise
+            raise RAGClientError(f"Unexpected error uploading document: {e}") from e

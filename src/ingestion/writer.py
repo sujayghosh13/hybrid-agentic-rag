@@ -24,3 +24,20 @@ class JSONLWriter:
                 count += 1
 
         return count
+
+
+def load_chunks_from_jsonl(jsonl_path: Path) -> list:
+    """Load Chunk objects from a JSONL file."""
+    path = Path(jsonl_path)
+    if not path.exists():
+        return []
+
+    chunks = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            data = json.loads(line)
+            chunks.append(Chunk.from_dict(data))
+    return chunks

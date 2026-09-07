@@ -9,6 +9,7 @@ class DocType(str, Enum):
     PDF = "pdf"
     MARKDOWN = "markdown"
     HTML = "html"
+    DOCX = "docx"
     UNKNOWN = "unknown"
 
     @classmethod
@@ -20,6 +21,8 @@ class DocType(str, Enum):
             return cls.HTML
         elif normalized == "pdf":
             return cls.PDF
+        elif normalized in ("docx", "doc"):
+            return cls.DOCX
         return cls.UNKNOWN
 
 
@@ -92,3 +95,25 @@ class Chunk:
             "source": self.source,
             "metadata": self.metadata.to_dict(),
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Chunk":
+        """Deserialize dictionary into Chunk instance."""
+        meta_dict = data.get("metadata", {})
+        metadata = ChunkMetadata(
+            filename=meta_dict.get("filename", ""),
+            doc_type=meta_dict.get("doc_type", ""),
+            page_number=meta_dict.get("page_number"),
+            section=meta_dict.get("section"),
+            heading=meta_dict.get("heading"),
+            chunk_index=meta_dict.get("chunk_index", 0),
+            total_chunks=meta_dict.get("total_chunks", 0),
+            token_count=meta_dict.get("token_count", 0),
+            char_count=meta_dict.get("char_count", 0),
+        )
+        return cls(
+            id=data["id"],
+            text=data["text"],
+            source=data["source"],
+            metadata=metadata,
+        )
