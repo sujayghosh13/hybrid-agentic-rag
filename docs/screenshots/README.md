@@ -1,48 +1,33 @@
-# UI Screenshots & Capture Instructions
+# Application Interface Screenshots & Artifacts
 
-This directory holds visual records (`before.png` and `after.png`) documenting the Streamlit interface redesign for the Hybrid Agentic RAG system.
-
----
-
-## Required Files
-
-- `before.png`: Baseline Streamlit UI (original default design with emoji headers and standard metric widgets).
-- `after.png`: Redesigned developer/infrastructure UI (restrained palette `#0B0F14`, technical badges, stat strip, trace log, and evidence cards).
+This directory contains visual records of the running **Hybrid-Agentic-RAG** Streamlit interface, satisfying Capstone Requirement Section 23 ("Screenshots of the application").
 
 ---
 
-## Instructions for Capturing Screenshots
+## Committed Screenshot Artifacts
 
-Because this repository enforces strict **offline-first** constraints and does not bundle heavy headless browser drivers (like Playwright or Selenium), follow these steps to capture visual records using your local browser:
+| File | Description | Capstone Demonstration Focus |
+| :--- | :--- | :--- |
+| [`01_main_interface.png`](file:///d:/hybrid-agentic-rag/docs/screenshots/01_main_interface.png) | **Main Interface & Status Overview** | Full application landing view showing live Ollama & API status, model specifications (Qwen3, BGE-small, Cross-Encoder), storage readiness, example query chips, and multi-format document upload zone. |
+| [`02_rag_answer_sources.png`](file:///d:/hybrid-agentic-rag/docs/screenshots/02_rag_answer_sources.png) | **RAG Answer & Source Attribution** | Real generated answer for *"How does Docker bridge networking work?"* along with the execution stat strip and verified evidence source cards displaying chunk IDs, relevance scores, and source text snippets. |
+| [`03_execution_details.png`](file:///d:/hybrid-agentic-rag/docs/screenshots/03_execution_details.png) | **Orchestration Trace & CRAG Grading** | Detailed view of the orchestration pipeline: CRAG Evidence Grade (`GOOD`), Retrieval Hops (`1 / 2`), CRAG Correction Status (`No`), total latency (`11.25s`), and the step-by-step query routing and rewriting trace. |
 
-### Step 1: Ensure Local Stack is Running
-Make sure the backend and frontend services are active:
+---
+
+## Capturing / Regenerating Screenshots
+
+To regenerate these screenshots automatically from the live application, run:
 ```powershell
-# In terminal 1 (or via docker compose):
-docker compose up -d
-
-# Verify services:
-curl http://localhost:8000/health
-curl http://localhost:8501/_stcore/health
+python scripts/capture_screenshots.py
 ```
 
-### Step 2: Open Application in Browser
-1. Open your browser (Google Chrome, Microsoft Edge, Brave, or Firefox) and navigate to:
-   `http://localhost:8501`
-2. Set the browser window to standard desktop resolution:
-   - Width: **1440px** (or 1920px)
-   - Height: **900px** (or 1080px)
-
-### Step 3: Run Sample Query
-1. In the **ASK THE DOCUMENTATION** area, click on the example chip:
-   `How does Docker bridge networking work?`
-2. Click **ASK ASSISTANT →** to generate the full answer, metrics strip, orchestration trace, and retrieved sources.
-
-### Step 4: Capture Screenshots
-1. **Full Page or Viewport Capture**:
-   - In Chrome / Edge: Press `Ctrl + Shift + I` to open Developer Tools.
-   - Press `Ctrl + Shift + P` to open the Command Menu.
-   - Type `Capture full size screenshot` (or `Capture screenshot`) and press `Enter`.
-2. Save the file to this directory:
-   - Save the redesigned state as `docs/screenshots/after.png`.
-   - If rolling back or comparing with the initial commit baseline, save the original state as `docs/screenshots/before.png`.
+### Manual Capture Procedure:
+1. Ensure the stack is running:
+   ```powershell
+   docker compose up -d
+   # or local python app:
+   streamlit run app.py
+   ```
+2. Navigate to `http://localhost:8501`.
+3. Select an example query (e.g., *"How does Docker bridge networking work?"*) and click **Ask assistant**.
+4. Capture screenshots using browser DevTools (`Ctrl+Shift+P` $\rightarrow$ *Capture screenshot*) and save to this directory.

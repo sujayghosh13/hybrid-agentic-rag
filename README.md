@@ -32,9 +32,13 @@ An offline-first local Retrieval-Augmented Generation (RAG) system combining str
   - [Reranker Impact Analysis](#reranker-impact-analysis)
   - [End-to-End System Performance & Grounding Stress-Test](#end-to-end-system-performance--grounding-stress-test)
   - [How to Reproduce Evaluation](#how-to-reproduce-evaluation)
-- [Streamlit Application](#streamlit-application)
-  - [Streamlit Web Interface](#streamlit-web-interface)
-  - [Pixel-Faithful Claude Web UI](#pixel-faithful-claude-web-ui)
+- [Streamlit Application & Visual Demo](#streamlit-application--visual-demo)
+  - [Visual Interface Screenshots](#visual-interface-screenshots)
+- [Capstone Deliverables & Project Artifacts](#capstone-deliverables--project-artifacts)
+  - [Root Entrypoint](#root-entrypoint)
+  - [Interactive Jupyter Notebooks](#interactive-jupyter-notebooks)
+  - [Viva & Demonstration Q&A Guide](#viva--demonstration-qa-guide)
+  - [Structural Compatibility Wrappers](#structural-compatibility-wrappers)
 - [REST API Specification](#rest-api-specification)
 - [Latency Optimization & Performance Benchmarks](#latency-optimization--performance-benchmarks)
 - [Repository Structure](#repository-structure)
@@ -398,10 +402,10 @@ Evaluation outputs are exported to `data/evaluation/results/` as timestamped JSO
 
 ---
 
-## Streamlit Application & Canonical Claude UI
+## Streamlit Application & Visual Demo
 
-The application UI is hosted by **Streamlit** (`src/ui/app.py`), running on port `8501`:
-- **Canonical Design System:** Streamlit serves as the production host while rendering the canonical Claude design system (`frontend/index.html` / `hybrid-rag-frontend.html`) with zero-margin iframe overrides, custom dark aesthetic (`#0E1410`), and responsive layouts.
+The application UI is hosted by **Streamlit** (accessible via the root launcher `streamlit run app.py` or containerized service), running on port `8501`:
+- **Canonical Design System:** Streamlit serves as the production host while rendering the canonical developer interface (`frontend/index.html`) with responsive layout, telemetry badges, and interactive controls.
 - **System Health Sidebar:** Displays real-time readiness status for BM25, Qdrant, and Ollama with a live status indicator.
 - **Document Upload & Indexing Status Panel:** Integrated dropzone and file uploader supporting PDF, Markdown (`.md`), HTML (`.html`), and Word (`.docx`) files. Displays step-by-step progress (`Upload received` → `Extracting text...` → `Creating chunks...` → `Generating embeddings...` → `Updating indexes...` → `✅ Document indexed successfully`), prevents duplicate re-indexing, and immediately makes newly indexed documents searchable through the existing RAG chat interface.
 - **Format Filter Strip:** Allows users to filter retrieval by specific document format (`All Formats`, `PDF only`, `HTML only`, `Markdown only`, `DOCX only`) directly from the search bar.
@@ -411,7 +415,48 @@ The application UI is hosted by **Streamlit** (`src/ui/app.py`), running on port
 - **Attributed Sources Cards:** Expandable cards displaying chunk ID, source document path, rerank score, and chunk text.
 - **Conversational Memory Indicator:** Active session banner showing current turn count and sliding window context usage.
 
+### Visual Interface Screenshots
+
+| Main Interface & Readiness Status | Grounded Answer & Source Attribution |
+| :---: | :---: |
+| ![Main Interface](docs/screenshots/01_main_interface.png) | ![RAG Answer & Sources](docs/screenshots/02_rag_answer_sources.png) |
+
+| Orchestration Trace & CRAG Evidence Grading |
+| :---: |
+| ![Execution Details](docs/screenshots/03_execution_details.png) |
+
 ---
+
+## Capstone Deliverables & Project Artifacts
+
+This repository fulfills the deliverables specified in Section 22, 23, and 28 of the Capstone Project Guidelines:
+
+### 1. Root Application Launcher
+- **Entrypoint:** [`app.py`](app.py)  
+  Minimal, clean launcher delegating directly to `src/ui/app.py`. Enables starting the Streamlit application from the repository root:
+  ```bash
+  streamlit run app.py
+  ```
+
+### 2. Interactive Jupyter Notebooks (`notebooks/`)
+Three educational, fully reproducible notebooks demonstrating each pipeline phase using project modules and real data:
+- **[`notebooks/01_document_exploration.ipynb`](notebooks/01_document_exploration.ipynb):** Multi-format document loading (HTML, PDF, DOCX), structure-aware text extraction, heading hierarchy discovery, and corpus statistics.
+- **[`notebooks/02_chunking_and_embeddings.ipynb`](notebooks/02_chunking_and_embeddings.ipynb):** Demonstrates `StructureAwareChunker` (300–500 tokens, 15% overlap), chunk metadata preservation, `BAAI/bge-small-en-v1.5` embeddings (384 dimensions), and semantic cosine similarity.
+- **[`notebooks/03_rag_evaluation.ipynb`](notebooks/03_rag_evaluation.ipynb):** Explores the benchmark dataset (`benchmark_dataset.json`), tabulates empirical retrieval metrics (MRR, HitRate@K, NDCG@K, Recall@K), quantifies Cross-Encoder reranking gains (+69% MRR), and validates CRAG anti-hallucination refusal accuracy.
+
+### 3. Viva & Demonstration Q&A Guide
+- **File:** [`docs/demonstration_qna.md`](docs/demonstration_qna.md)  
+  Comprehensive preparation guide providing concise oral responses for all **24 Final Demonstration Questions** from Section 28 of the Capstone Guidelines (covering chunking trade-offs, vector DB selection, hybrid search intuition, CRAG mechanics, and enterprise scaling).
+
+### 4. Structural Compatibility Wrappers (`src/`)
+For evaluators verifying exact filenames specified in Section 22 without disturbing the underlying production subpackage architecture, non-breaking re-export wrappers are provided at:
+- `src/document_loader.py` $\rightarrow$ `src.ingestion.loaders`
+- `src/chunking.py` $\rightarrow$ `src.ingestion.chunker`
+- `src/embeddings.py` $\rightarrow$ `src.retrieval.dense`
+- `src/retriever.py` $\rightarrow$ `src.retrieval.hybrid`
+- `src/rag_pipeline.py` $\rightarrow$ `src.agent.agent`
+- `src/evaluation.py` $\rightarrow$ `src.evaluation.runner`
+*(Note: Raw document collection is stored under `data/raw/` to prevent duplicate corpus copies on disk).*
 
 ## REST API Specification
 
@@ -572,32 +617,48 @@ Local CPU-based inference initially encountered high latencies (~32s per query).
 
 ```
 hybrid-agentic-rag/
+├── app.py                         # Root Streamlit launcher (delegates to src/ui/app.py)
 ├── data/
-│   ├── raw/                       # Raw HTML, Markdown, PDF documentation
-│   ├── processed/                 # Processed chunks (chunks.jsonl) and BM25 index (bm25_index.pkl)
-│   ├── evaluation/                # 18-query benchmark dataset and output results
+│   ├── raw/                       # Raw documentation corpus (HTML, PDF, DOCX) [maps to data/documents]
+│   ├── processed/                 # Processed chunks (chunks.jsonl), BM25 index, & Qdrant storage
+│   ├── evaluation/                # Benchmark dataset (benchmark_dataset.json) & empirical results
 │   └── cache/                     # Local HuggingFace model cache directory
+├── docs/
+│   ├── demonstration_qna.md       # Capstone Viva & Demonstration Guide (24 questions answered)
+│   └── screenshots/               # High-resolution application screenshots (01-03)
+├── notebooks/
+│   ├── 01_document_exploration.ipynb     # Multi-format ingestion, extraction & statistics
+│   ├── 02_chunking_and_embeddings.ipynb  # StructureAwareChunker & BGE cosine similarity
+│   └── 03_rag_evaluation.ipynb          # Benchmark dataset inspection & empirical metric analysis
 ├── docker/
 │   ├── Dockerfile.api             # FastAPI container image definition
 │   └── Dockerfile.ui              # Streamlit container image definition
 ├── frontend/
-│   ├── index.html                 # Static HTML frontend (served by FastAPI at /app)
+│   ├── index.html                 # Static HTML frontend (canonical developer UI)
 │   └── config.js                  # Runtime API base URL configuration
 ├── scripts/
 │   ├── ingest.py                  # Document ingestion and chunking CLI
 │   ├── build_index.py             # Dense (Qdrant) and Sparse (BM25) indexing CLI
-│   └── run_evaluation.py          # Evaluation harness CLI (fast and full modes)
+│   ├── capture_screenshots.py     # Automated browser screenshot capture utility
+│   ├── run_evaluation.py          # Quantitative evaluation runner (fast/full)
+│   └── verify_final_capstone.py   # E2E Capstone verification harness (7 steps)
 ├── src/
+│   ├── document_loader.py         # [Compatibility Wrapper] re-exports src.ingestion.loaders
+│   ├── chunking.py                # [Compatibility Wrapper] re-exports src.ingestion.chunker
+│   ├── embeddings.py              # [Compatibility Wrapper] re-exports src.retrieval.dense
+│   ├── retriever.py               # [Compatibility Wrapper] re-exports src.retrieval.hybrid
+│   ├── rag_pipeline.py            # [Compatibility Wrapper] re-exports src.agent.agent
+│   ├── evaluation.py              # [Compatibility Wrapper] re-exports src.evaluation.runner
 │   ├── agent/                     # LocalQwenAgent, prompts, tools, and Ollama client
 │   ├── api/                       # FastAPI app, routes, schemas, and service layer
 │   ├── config.py                  # Centralized application settings (pydantic/dataclass)
 │   ├── correction/                # CRAG evidence evaluator and corrective action engine
 │   ├── evaluation/                # Benchmark metrics, runners, and reporting utilities
-│   ├── ingestion/                 # Document loaders (HTML, PDF, MD) and chunkers
+│   ├── ingestion/                 # Document loaders (HTML, PDF, MD, DOCX) and chunkers
 │   ├── reranking/                 # Cross-encoder reranker wrapper and data models
 │   ├── retrieval/                 # Dense retriever (Qdrant), sparse retriever (BM25), and RRF
 │   └── ui/                        # Streamlit app, API client, and reusable UI components
-├── tests/                         # Comprehensive pytest test suite (82 tests)
+├── tests/                         # Comprehensive pytest test suite (131 tests, 100% passing)
 ├── .dockerignore                  # Docker build context exclusions
 ├── .env.example                   # Environment variable template with documentation
 ├── .gitignore                     # Git ignore rules for virtual environments, caches, and indexes
@@ -661,13 +722,15 @@ In separate terminal windows with virtual environment activated:
 # Terminal 1: Run FastAPI backend
 uvicorn src.api.main:app --host 127.0.0.1 --port 8000 --reload
 
-# Terminal 2: Run Streamlit frontend
-streamlit run src/ui/app.py
+# Terminal 2: Run Streamlit frontend (from repository root)
+streamlit run app.py
+# (or directly via src/ui/app.py)
 ```
 
 **Access the applications:**
-- **HTML Frontend:** `http://localhost:3000`
-- **Streamlit UI:** `http://localhost:8501`
+- **Streamlit Web UI:** `http://localhost:8501`
+- **FastAPI OpenAPI Docs:** `http://localhost:8000/docs`
+- **Static HTML Frontend:** `http://localhost:3000` (optional)
 
 ---
 
