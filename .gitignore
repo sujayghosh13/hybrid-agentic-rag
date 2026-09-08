@@ -24,6 +24,10 @@ data/*
 !data/raw/.gitkeep
 !data/processed/
 !data/processed/.gitkeep
+!data/evaluation/
+!data/evaluation/**
+data/evaluation/results/eval_*
+data/processed/qdrant_storage/.lock
 
 # IDE / Editor files
 .vscode/

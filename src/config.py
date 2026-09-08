@@ -20,6 +20,7 @@ class Settings:
     qdrant_url: str = os.getenv("QDRANT_URL", "")
     qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "hybrid_chunks")
     embedding_model_name: str = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-en-v1.5")
+    hf_home: str = os.getenv("HF_HOME", str(hf_cache))
     bm25_index_path: Path = Path(os.getenv("BM25_INDEX_PATH", "data/processed/bm25_index.pkl"))
     retrieval_top_k: int = int(os.getenv("RETRIEVAL_TOP_K", "10"))
     rrf_k: int = int(os.getenv("RRF_K", "60"))

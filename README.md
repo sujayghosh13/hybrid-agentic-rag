@@ -838,16 +838,23 @@ pytest
 pytest --cov=src tests/
 ```
 
-### Test Suite Distribution (82 Total Tests)
+### Test Suite Distribution (131 Total Tests)
 - `tests/test_scaffold.py`: Environment and directory sanity checks
 - `tests/test_loaders.py`: HTML, Markdown, and PDF loader functionality
+- `tests/test_docx_loader.py`: Word document processing and table extraction
 - `tests/test_chunker.py`: Structure-aware recursive chunking and metadata preservation
 - `tests/test_retrieval.py`: Dense, BM25, and Reciprocal Rank Fusion mechanics
 - `tests/test_reranking.py`: Cross-encoder scoring and score-based sorting
+- `tests/test_metadata_filtering.py`: Qdrant payload filters by doc_type, file name, and section
 - `tests/test_agent.py`: Routing, query rewriting, sufficiency check, and hop budget controls
 - `tests/test_correction.py`: CRAG evidence grading, corrective queries, and refusal triggers
+- `tests/test_conversational_memory.py`: Multi-turn conversational memory, history tracking, and query reformulation
+- `tests/test_multi_doc_reasoning.py`: Multi-document synthesis and cross-chunk evidence aggregation
+- `tests/test_hallucination_refusal.py`: Anti-hallucination guardrails and out-of-domain query refusal
 - `tests/test_evaluation.py`: Ranking metrics (Hit@K, MRR, nDCG) and runner mechanics
 - `tests/test_api.py`: FastAPI routes, validation errors, and health endpoints
+- `tests/test_upload.py`: Dynamic document upload, validation, chunking, and incremental re-indexing
+- `tests/test_latency_optimizations.py`: Prompt caching, query embedding cache, and latency profiling
 - `tests/test_ui_client.py`: Streamlit API client error mapping and serialization
 - `tests/test_pipeline.py`: End-to-end integration across components
 
@@ -891,4 +898,4 @@ pytest --cov=src tests/
 - **End-to-End Modular Engineering:** Cleanly separated layers (Ingestion → Retrieval → Reranking → Agent/CRAG → API → UI → Docker) with zero leaky abstractions.
 - **Empirical Rigor:** Complete quantitative evaluation suite benchmarking MRR, Hit@K, Recall@K, and nDCG across 6 query categories.
 - **Defensive Design:** Explicit anti-hallucination refusal, Pydantic input validation, strict hop limits, and comprehensive HTTP error handling.
-- **Automated Verification:** 82 passing tests covering unit logic, integration flows, and edge cases.
+- **Automated Verification:** 131 passing tests covering unit logic, integration flows, and edge cases.

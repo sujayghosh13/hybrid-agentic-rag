@@ -1,0 +1,1024 @@
+{
+  "run_id": "eval_20260905_094538",
+  "timestamp": "2026-09-05T09:45:38.733695Z",
+  "mode": "full",
+  "git_commit": "bd6ad12",
+  "dataset_version": "1.0.0",
+  "dataset_hash": "46e68b048b285d3d",
+  "execution_duration_sec": 198.577,
+  "environment": {
+    "python_version": "3.11.9",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    "ollama_model": "qwen3:1.7b",
+    "crag_enabled": true,
+    "total_corpus_chunks": 308
+  },
+  "retrieval_comparison": {
+    "dense": {
+      "hit_rate": {
+        "@1": 0.4667,
+        "@3": 0.6,
+        "@5": 0.6,
+        "@10": 0.8
+      },
+      "recall": {
+        "@1": 0.2111,
+        "@3": 0.3667,
+        "@5": 0.3667,
+        "@10": 0.4667
+      },
+      "precision": {
+        "@1": 0.4667,
+        "@3": 0.2444,
+        "@5": 0.1467,
+        "@10": 0.1
+      },
+      "mrr": 0.5475,
+      "ndcg": {
+        "@1": 0.4667,
+        "@3": 0.3709,
+        "@5": 0.3709,
+        "@10": 0.4134
+      }
+    },
+    "sparse": {
+      "hit_rate": {
+        "@1": 0.0667,
+        "@3": 0.4,
+        "@5": 0.6667,
+        "@10": 0.6667
+      },
+      "recall": {
+        "@1": 0.0667,
+        "@3": 0.2556,
+        "@5": 0.3889,
+        "@10": 0.4111
+      },
+      "precision": {
+        "@1": 0.0667,
+        "@3": 0.1556,
+        "@5": 0.16,
+        "@10": 0.0867
+      },
+      "mrr": 0.2744,
+      "ndcg": {
+        "@1": 0.0667,
+        "@3": 0.2006,
+        "@5": 0.2748,
+        "@10": 0.2852
+      }
+    },
+    "hybrid_rrf": {
+      "hit_rate": {
+        "@1": 0.2,
+        "@3": 0.4667,
+        "@5": 0.6,
+        "@10": 0.8
+      },
+      "recall": {
+        "@1": 0.1333,
+        "@3": 0.2889,
+        "@5": 0.3667,
+        "@10": 0.5556
+      },
+      "precision": {
+        "@1": 0.2,
+        "@3": 0.1778,
+        "@5": 0.1467,
+        "@10": 0.12
+      },
+      "mrr": 0.3912,
+      "ndcg": {
+        "@1": 0.2,
+        "@3": 0.266,
+        "@5": 0.3105,
+        "@10": 0.3896
+      }
+    },
+    "hybrid_reranked": {
+      "hit_rate": {
+        "@1": 0.6,
+        "@3": 0.7333,
+        "@5": 0.8,
+        "@10": 0.8
+      },
+      "recall": {
+        "@1": 0.3,
+        "@3": 0.3889,
+        "@5": 0.4778,
+        "@10": 0.5
+      },
+      "precision": {
+        "@1": 0.6,
+        "@3": 0.2667,
+        "@5": 0.2,
+        "@10": 0.1067
+      },
+      "mrr": 0.6611,
+      "ndcg": {
+        "@1": 0.6,
+        "@3": 0.4214,
+        "@5": 0.4683,
+        "@10": 0.4782
+      }
+    }
+  },
+  "reranker_analysis": {
+    "pre_rerank_mrr": 0.3912,
+    "post_rerank_mrr": 0.6611,
+    "delta_mrr": 0.2699,
+    "pre_rerank_hit_1": 0.2,
+    "post_rerank_hit_1": 0.6,
+    "delta_hit_1": 0.4,
+    "pre_rerank_ndcg_5": 0.3105,
+    "post_rerank_ndcg_5": 0.4683,
+    "delta_ndcg_5": 0.1578,
+    "promotion_rate": 0.6,
+    "average_rank_shift": 1.7273
+  },
+  "crag_analysis": {
+    "total_queries": 18,
+    "correction_trigger_count": 0,
+    "correction_trigger_rate": 0.0,
+    "successful_correction_count": 0,
+    "successful_correction_rate": 0.0,
+    "grade_distribution": {
+      "GOOD": 16,
+      "PARTIAL": 0,
+      "BAD": 2
+    },
+    "mean_evidence_gain": 0.0,
+    "refusal_accuracy": 0.9444,
+    "average_hops": 1.0
+  },
+  "answer_analysis": {
+    "mean_aspect_coverage": 0.4889,
+    "refusal_accuracy": 0.9444,
+    "mean_source_attribution_coverage": 1.0
+  },
+  "per_query_results": [
+    {
+      "query_id": "direct_factual_01",
+      "query": "What is the difference between user-defined bridge networks and the default bridge network in Docker?",
+      "category": "direct_factual",
+      "dense_hits": [
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_20",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_21",
+        "docker-bridge-network.html_chunk_19"
+      ],
+      "sparse_hits": [
+        "docker-bridge-network.html_chunk_20",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_19",
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_21"
+      ],
+      "hybrid_hits": [
+        "docker-bridge-network.html_chunk_20",
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_19",
+        "docker-bridge-network.html_chunk_21"
+      ],
+      "reranked_hits": [
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_20",
+        "docker-bridge-network.html_chunk_19",
+        "docker-bridge-network.html_chunk_21",
+        "docker-bridge-network.html_chunk_8"
+      ],
+      "relevant_chunks": [
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_10"
+      ],
+      "dense_mrr": 1.0,
+      "sparse_mrr": 0.25,
+      "hybrid_mrr": 0.5,
+      "reranked_mrr": 1.0,
+      "aspect_coverage": 0.25,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 14364.96,
+      "error": null
+    },
+    {
+      "query_id": "direct_factual_02",
+      "query": "What is the default bridge interface name and driver option in Docker?",
+      "category": "direct_factual",
+      "dense_hits": [
+        "docker-bridge-network.html_chunk_23",
+        "docker-bridge-network.html_chunk_24",
+        "docker-bridge-network.html_chunk_8",
+        "docker-networking.html_chunk_16",
+        "docker-bridge-network.html_chunk_28"
+      ],
+      "sparse_hits": [
+        "docker-bridge-network.html_chunk_24",
+        "docker-bridge-network.html_chunk_25",
+        "docker-bridge-network.html_chunk_23",
+        "docker-bridge-network.html_chunk_10",
+        "docker-bridge-network.html_chunk_11"
+      ],
+      "hybrid_hits": [
+        "docker-bridge-network.html_chunk_24",
+        "docker-bridge-network.html_chunk_23",
+        "docker-bridge-network.html_chunk_25",
+        "docker-bridge-network.html_chunk_31",
+        "docker-bridge-network.html_chunk_11"
+      ],
+      "reranked_hits": [
+        "docker-bridge-network.html_chunk_23",
+        "docker-bridge-network.html_chunk_24",
+        "docker-bridge-network.html_chunk_11",
+        "docker-bridge-network.html_chunk_25",
+        "docker-networking.html_chunk_16"
+      ],
+      "relevant_chunks": [
+        "docker-bridge-network.html_chunk_10",
+        "docker-bridge-network.html_chunk_23"
+      ],
+      "dense_mrr": 1.0,
+      "sparse_mrr": 0.3333,
+      "hybrid_mrr": 0.5,
+      "reranked_mrr": 1.0,
+      "aspect_coverage": 1.0,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 8435.58,
+      "error": null
+    },
+    {
+      "query_id": "direct_factual_03",
+      "query": "What is the role of a ReplicaSet in a Kubernetes Deployment?",
+      "category": "direct_factual",
+      "dense_hits": [
+        "kubernetes-deployments.html_chunk_12",
+        "kubernetes-deployments.html_chunk_11",
+        "kubernetes-deployments.html_chunk_70",
+        "kubernetes-deployments.html_chunk_83",
+        "kubernetes-deployments.html_chunk_19"
+      ],
+      "sparse_hits": [
+        "kubernetes-deployments.html_chunk_70",
+        "kubernetes-deployments.html_chunk_12",
+        "kubernetes-deployments.html_chunk_11",
+        "kubernetes-deployments.html_chunk_36",
+        "kubernetes-pods.html_chunk_20"
+      ],
+      "hybrid_hits": [
+        "kubernetes-deployments.html_chunk_12",
+        "kubernetes-deployments.html_chunk_70",
+        "kubernetes-deployments.html_chunk_11",
+        "kubernetes-deployments.html_chunk_19",
+        "kubernetes-deployments.html_chunk_71"
+      ],
+      "reranked_hits": [
+        "kubernetes-deployments.html_chunk_12",
+        "kubernetes-deployments.html_chunk_70",
+        "kubernetes-deployments.html_chunk_11",
+        "kubernetes-deployments.html_chunk_13",
+        "kubernetes-deployments.html_chunk_109"
+      ],
+      "relevant_chunks": [
+        "kubernetes-deployments.html_chunk_12",
+        "kubernetes-deployments.html_chunk_13"
+      ],
+      "dense_mrr": 1.0,
+      "sparse_mrr": 0.5,
+      "hybrid_mrr": 1.0,
+      "reranked_mrr": 1.0,
+      "aspect_coverage": 0.25,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 6504.75,
+      "error": null
+    },
+    {
+      "query_id": "keyword_heavy_01",
+      "query": "Docker bridge com.docker.network.bridge.enable_ip_masquerade --ip-masq",
+      "category": "keyword_heavy",
+      "dense_hits": [
+        "docker-bridge-network.html_chunk_24",
+        "docker-bridge-network.html_chunk_23",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_29",
+        "docker-bridge-network.html_chunk_28"
+      ],
+      "sparse_hits": [
+        "docker-bridge-network.html_chunk_23",
+        "docker-bridge-network.html_chunk_24",
+        "docker-bridge-network.html_chunk_22",
+        "docker-bridge-network.html_chunk_10",
+        "docker-bridge-network.html_chunk_9"
+      ],
+      "hybrid_hits": [
+        "docker-bridge-network.html_chunk_23",
+        "docker-bridge-network.html_chunk_24",
+        "docker-bridge-network.html_chunk_14",
+        "docker-bridge-network.html_chunk_31",
+        "docker-bridge-network.html_chunk_25"
+      ],
+      "reranked_hits": [
+        "docker-bridge-network.html_chunk_23",
+        "docker-bridge-network.html_chunk_24",
+        "docker-bridge-network.html_chunk_10",
+        "docker-bridge-network.html_chunk_25",
+        "docker-bridge-network.html_chunk_8"
+      ],
+      "relevant_chunks": [
+        "docker-bridge-network.html_chunk_23"
+      ],
+      "dense_mrr": 0.5,
+      "sparse_mrr": 1.0,
+      "hybrid_mrr": 1.0,
+      "reranked_mrr": 1.0,
+      "aspect_coverage": 1.0,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 7735.42,
+      "error": null
+    },
+    {
+      "query_id": "keyword_heavy_02",
+      "query": "Kubernetes Deployment spec.strategy.rollingUpdate.maxSurge maxUnavailable",
+      "category": "keyword_heavy",
+      "dense_hits": [
+        "kubernetes-deployments.html_chunk_114",
+        "kubernetes-deployments.html_chunk_113",
+        "kubernetes-deployments.html_chunk_88",
+        "kubernetes-deployments.html_chunk_22",
+        "kubernetes-deployments.html_chunk_97"
+      ],
+      "sparse_hits": [
+        "kubernetes-deployments.html_chunk_113",
+        "kubernetes-deployments.html_chunk_112",
+        "kubernetes-deployments.html_chunk_114",
+        "kubernetes-deployments.html_chunk_35",
+        "kubernetes-deployments.html_chunk_81"
+      ],
+      "hybrid_hits": [
+        "kubernetes-deployments.html_chunk_113",
+        "kubernetes-deployments.html_chunk_114",
+        "kubernetes-deployments.html_chunk_112",
+        "kubernetes-deployments.html_chunk_35",
+        "kubernetes-deployments.html_chunk_34"
+      ],
+      "reranked_hits": [
+        "kubernetes-deployments.html_chunk_113",
+        "kubernetes-deployments.html_chunk_114",
+        "kubernetes-deployments.html_chunk_34",
+        "kubernetes-deployments.html_chunk_35",
+        "kubernetes-deployments.html_chunk_112"
+      ],
+      "relevant_chunks": [
+        "kubernetes-deployments.html_chunk_20",
+        "kubernetes-deployments.html_chunk_21"
+      ],
+      "dense_mrr": 0.0,
+      "sparse_mrr": 0.0,
+      "hybrid_mrr": 0.0,
+      "reranked_mrr": 0.0,
+      "aspect_coverage": 0.75,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 7843.65,
+      "error": null
+    },
+    {
+      "query_id": "keyword_heavy_03",
+      "query": "Docker network driver macvlan overlay host none bridge",
+      "category": "keyword_heavy",
+      "dense_hits": [
+        "docker-networking.html_chunk_16",
+        "docker-networking.html_chunk_15",
+        "docker-networking.html_chunk_9",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_36"
+      ],
+      "sparse_hits": [
+        "docker-networking.html_chunk_15",
+        "docker-networking.html_chunk_16",
+        "docker-bridge-network.html_chunk_2",
+        "docker-networking.html_chunk_2",
+        "docker-bridge-network.html_chunk_3"
+      ],
+      "hybrid_hits": [
+        "docker-networking.html_chunk_15",
+        "docker-networking.html_chunk_16",
+        "docker-bridge-network.html_chunk_36",
+        "docker-networking.html_chunk_9",
+        "docker-bridge-network.html_chunk_31"
+      ],
+      "reranked_hits": [
+        "docker-networking.html_chunk_16",
+        "docker-networking.html_chunk_15",
+        "docker-bridge-network.html_chunk_3",
+        "docker-networking.html_chunk_3",
+        "docker-networking.html_chunk_9"
+      ],
+      "relevant_chunks": [
+        "docker-networking.html_chunk_9",
+        "docker-networking.html_chunk_16"
+      ],
+      "dense_mrr": 1.0,
+      "sparse_mrr": 0.5,
+      "hybrid_mrr": 0.5,
+      "reranked_mrr": 1.0,
+      "aspect_coverage": 1.0,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 7882.14,
+      "error": null
+    },
+    {
+      "query_id": "semantic_paraphrased_01",
+      "query": "How can containers on the same physical host talk to each other without exposing ports to the outside world?",
+      "category": "semantic_paraphrased",
+      "dense_hits": [
+        "kubernetes-pods.html_chunk_18",
+        "docker-networking.html_chunk_15",
+        "kubernetes-pods.html_chunk_65",
+        "docker-networking.html_chunk_8",
+        "docker-networking.html_chunk_14"
+      ],
+      "sparse_hits": [
+        "docker-networking.html_chunk_17",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_20",
+        "docker-networking.html_chunk_9",
+        "docker-bridge-network.html_chunk_19"
+      ],
+      "hybrid_hits": [
+        "docker-networking.html_chunk_17",
+        "docker-networking.html_chunk_9",
+        "kubernetes-pods.html_chunk_18",
+        "docker-networking.html_chunk_8",
+        "docker-networking.html_chunk_14"
+      ],
+      "reranked_hits": [
+        "docker-networking.html_chunk_17",
+        "docker-networking.html_chunk_18",
+        "docker-bridge-network.html_chunk_10",
+        "docker-networking.html_chunk_10",
+        "docker-networking.html_chunk_15"
+      ],
+      "relevant_chunks": [
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_10"
+      ],
+      "dense_mrr": 0.1111,
+      "sparse_mrr": 0.0,
+      "hybrid_mrr": 0.1,
+      "reranked_mrr": 0.3333,
+      "aspect_coverage": 0.0,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 9821.9,
+      "error": null
+    },
+    {
+      "query_id": "semantic_paraphrased_02",
+      "query": "How does Kubernetes guarantee that exactly one instance of a pod runs across every single machine in a cluster?",
+      "category": "semantic_paraphrased",
+      "dense_hits": [
+        "kubernetes-pods.html_chunk_12",
+        "kubernetes-pods.html_chunk_69",
+        "kubernetes-pods.html_chunk_57",
+        "kubernetes-pods.html_chunk_11",
+        "kubernetes-pods.html_chunk_54"
+      ],
+      "sparse_hits": [
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-deployments.html_chunk_33",
+        "kubernetes-workloads.html_chunk_46",
+        "kubernetes-pods.html_chunk_69",
+        "kubernetes-pods.html_chunk_12"
+      ],
+      "hybrid_hits": [
+        "kubernetes-pods.html_chunk_12",
+        "kubernetes-pods.html_chunk_69",
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-workloads.html_chunk_46",
+        "kubernetes-pods.html_chunk_13"
+      ],
+      "reranked_hits": [
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-pods.html_chunk_57",
+        "kubernetes-workloads.html_chunk_46",
+        "kubernetes-pods.html_chunk_13",
+        "kubernetes-pods.html_chunk_69"
+      ],
+      "relevant_chunks": [
+        "kubernetes-workloads.html_chunk_10",
+        "kubernetes-workloads.html_chunk_45",
+        "kubernetes-workloads.html_chunk_46"
+      ],
+      "dense_mrr": 0.125,
+      "sparse_mrr": 0.3333,
+      "hybrid_mrr": 0.25,
+      "reranked_mrr": 0.3333,
+      "aspect_coverage": 0.0,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 8901.6,
+      "error": null
+    },
+    {
+      "query_id": "semantic_paraphrased_03",
+      "query": "What mechanism allows non-disruptive rollouts of new container image versions in Kubernetes?",
+      "category": "semantic_paraphrased",
+      "dense_hits": [
+        "kubernetes-deployments.html_chunk_91",
+        "kubernetes-deployments.html_chunk_16",
+        "kubernetes-deployments.html_chunk_24",
+        "docker-bridge-network.html_chunk_6",
+        "docker-networking.html_chunk_6"
+      ],
+      "sparse_hits": [
+        "kubernetes-deployments.html_chunk_26",
+        "kubernetes-pods.html_chunk_16",
+        "kubernetes-pods.html_chunk_61",
+        "kubernetes-pods.html_chunk_15",
+        "kubernetes-deployments.html_chunk_98"
+      ],
+      "hybrid_hits": [
+        "kubernetes-pods.html_chunk_62",
+        "kubernetes-pods.html_chunk_61",
+        "kubernetes-deployments.html_chunk_85",
+        "kubernetes-deployments.html_chunk_40",
+        "kubernetes-pods.html_chunk_24"
+      ],
+      "reranked_hits": [
+        "kubernetes-pods.html_chunk_61",
+        "kubernetes-pods.html_chunk_62",
+        "kubernetes-pods.html_chunk_16",
+        "kubernetes-deployments.html_chunk_43",
+        "kubernetes-deployments.html_chunk_16"
+      ],
+      "relevant_chunks": [
+        "kubernetes-deployments.html_chunk_12",
+        "kubernetes-deployments.html_chunk_13",
+        "kubernetes-deployments.html_chunk_20"
+      ],
+      "dense_mrr": 0.1429,
+      "sparse_mrr": 0.0,
+      "hybrid_mrr": 0.1429,
+      "reranked_mrr": 0.0,
+      "aspect_coverage": 0.25,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 8263.28,
+      "error": null
+    },
+    {
+      "query_id": "multi_concept_01",
+      "query": "How do user-defined bridge networks handle DNS resolution compared to legacy links on the default bridge?",
+      "category": "multi_concept",
+      "dense_hits": [
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_21",
+        "docker-bridge-network.html_chunk_20",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_36"
+      ],
+      "sparse_hits": [
+        "docker-bridge-network.html_chunk_21",
+        "docker-bridge-network.html_chunk_20",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_12"
+      ],
+      "hybrid_hits": [
+        "docker-bridge-network.html_chunk_21",
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_20",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_36"
+      ],
+      "reranked_hits": [
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_21",
+        "docker-bridge-network.html_chunk_20",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_36"
+      ],
+      "relevant_chunks": [
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_10",
+        "docker-bridge-network.html_chunk_11"
+      ],
+      "dense_mrr": 1.0,
+      "sparse_mrr": 0.25,
+      "hybrid_mrr": 0.5,
+      "reranked_mrr": 1.0,
+      "aspect_coverage": 0.6667,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 6580.82,
+      "error": null
+    },
+    {
+      "query_id": "multi_concept_02",
+      "query": "What are the primary differences between Kubernetes StatefulSets and stateless Deployments regarding storage and network identity?",
+      "category": "multi_concept",
+      "dense_hits": [
+        "kubernetes-workloads.html_chunk_46",
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-deployments.html_chunk_6",
+        "kubernetes-workloads.html_chunk_6",
+        "kubernetes-pods.html_chunk_6"
+      ],
+      "sparse_hits": [
+        "kubernetes-deployments.html_chunk_44",
+        "kubernetes-pods.html_chunk_28",
+        "kubernetes-workloads.html_chunk_20",
+        "kubernetes-pods.html_chunk_20",
+        "kubernetes-deployments.html_chunk_45"
+      ],
+      "hybrid_hits": [
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-deployments.html_chunk_70",
+        "kubernetes-deployments.html_chunk_45",
+        "kubernetes-pods.html_chunk_31",
+        "kubernetes-deployments.html_chunk_47"
+      ],
+      "reranked_hits": [
+        "kubernetes-workloads.html_chunk_46",
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-deployments.html_chunk_6",
+        "kubernetes-pods.html_chunk_6",
+        "kubernetes-workloads.html_chunk_6"
+      ],
+      "relevant_chunks": [
+        "kubernetes-workloads.html_chunk_37",
+        "kubernetes-workloads.html_chunk_45",
+        "kubernetes-workloads.html_chunk_46"
+      ],
+      "dense_mrr": 1.0,
+      "sparse_mrr": 0.0,
+      "hybrid_mrr": 0.0,
+      "reranked_mrr": 1.0,
+      "aspect_coverage": 0.0,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 10612.01,
+      "error": null
+    },
+    {
+      "query_id": "multi_concept_03",
+      "query": "When should you use a Macvlan or Overlay network driver instead of a standard Bridge network in Docker?",
+      "category": "multi_concept",
+      "dense_hits": [
+        "docker-networking.html_chunk_16",
+        "docker-networking.html_chunk_9",
+        "docker-bridge-network.html_chunk_8",
+        "docker-networking.html_chunk_15",
+        "docker-bridge-network.html_chunk_31"
+      ],
+      "sparse_hits": [
+        "docker-networking.html_chunk_15",
+        "docker-networking.html_chunk_16",
+        "docker-networking.html_chunk_9",
+        "docker-bridge-network.html_chunk_10",
+        "docker-networking.html_chunk_8"
+      ],
+      "hybrid_hits": [
+        "docker-networking.html_chunk_16",
+        "docker-networking.html_chunk_15",
+        "docker-networking.html_chunk_9",
+        "docker-bridge-network.html_chunk_9",
+        "docker-bridge-network.html_chunk_8"
+      ],
+      "reranked_hits": [
+        "docker-networking.html_chunk_16",
+        "docker-networking.html_chunk_15",
+        "docker-networking.html_chunk_9",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_20"
+      ],
+      "relevant_chunks": [
+        "docker-networking.html_chunk_9",
+        "docker-networking.html_chunk_16"
+      ],
+      "dense_mrr": 1.0,
+      "sparse_mrr": 0.5,
+      "hybrid_mrr": 1.0,
+      "reranked_mrr": 1.0,
+      "aspect_coverage": 0.3333,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 8436.35,
+      "error": null
+    },
+    {
+      "query_id": "multi_chunk_01",
+      "query": "How does a Kubernetes Deployment orchestrate Pod lifecycle and container restarts via its template specification?",
+      "category": "multi_chunk",
+      "dense_hits": [
+        "kubernetes-workloads.html_chunk_46",
+        "kubernetes-workloads.html_chunk_19",
+        "kubernetes-pods.html_chunk_27",
+        "kubernetes-deployments.html_chunk_43",
+        "kubernetes-workloads.html_chunk_11"
+      ],
+      "sparse_hits": [
+        "kubernetes-pods.html_chunk_19",
+        "kubernetes-pods.html_chunk_18",
+        "kubernetes-deployments.html_chunk_16",
+        "kubernetes-deployments.html_chunk_15",
+        "kubernetes-deployments.html_chunk_73"
+      ],
+      "hybrid_hits": [
+        "kubernetes-pods.html_chunk_15",
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-workloads.html_chunk_46",
+        "kubernetes-pods.html_chunk_59",
+        "kubernetes-deployments.html_chunk_33"
+      ],
+      "reranked_hits": [
+        "kubernetes-deployments.html_chunk_33",
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-pods.html_chunk_15",
+        "kubernetes-deployments.html_chunk_73",
+        "kubernetes-pods.html_chunk_59"
+      ],
+      "relevant_chunks": [
+        "kubernetes-deployments.html_chunk_13",
+        "kubernetes-pods.html_chunk_16"
+      ],
+      "dense_mrr": 0.0,
+      "sparse_mrr": 0.0,
+      "hybrid_mrr": 0.0,
+      "reranked_mrr": 0.0,
+      "aspect_coverage": 1.0,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 9472.58,
+      "error": null
+    },
+    {
+      "query_id": "multi_chunk_02",
+      "query": "How are batch Jobs and CronJobs distinguished from continuously running daemon workloads in Kubernetes Workload Management?",
+      "category": "multi_chunk",
+      "dense_hits": [
+        "kubernetes-workloads.html_chunk_49",
+        "kubernetes-workloads.html_chunk_46",
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-deployments.html_chunk_43",
+        "kubernetes-pods.html_chunk_27"
+      ],
+      "sparse_hits": [
+        "kubernetes-workloads.html_chunk_12",
+        "kubernetes-workloads.html_chunk_48",
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-workloads.html_chunk_47",
+        "kubernetes-pods.html_chunk_60"
+      ],
+      "hybrid_hits": [
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-workloads.html_chunk_49",
+        "kubernetes-workloads.html_chunk_12",
+        "kubernetes-workloads.html_chunk_47",
+        "kubernetes-pods.html_chunk_59"
+      ],
+      "reranked_hits": [
+        "kubernetes-workloads.html_chunk_47",
+        "kubernetes-workloads.html_chunk_12",
+        "kubernetes-workloads.html_chunk_11",
+        "kubernetes-workloads.html_chunk_46",
+        "kubernetes-workloads.html_chunk_49"
+      ],
+      "relevant_chunks": [
+        "kubernetes-workloads.html_chunk_10",
+        "kubernetes-workloads.html_chunk_45",
+        "kubernetes-workloads.html_chunk_47"
+      ],
+      "dense_mrr": 0.0,
+      "sparse_mrr": 0.25,
+      "hybrid_mrr": 0.25,
+      "reranked_mrr": 1.0,
+      "aspect_coverage": 0.3333,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 11417.83,
+      "error": null
+    },
+    {
+      "query_id": "multi_chunk_03",
+      "query": "What options exist for binding container ports and configuring iptables rules on Docker host networks and bridge networks?",
+      "category": "multi_chunk",
+      "dense_hits": [
+        "docker-bridge-network.html_chunk_25",
+        "docker-bridge-network.html_chunk_11",
+        "docker-networking.html_chunk_18",
+        "docker-bridge-network.html_chunk_24",
+        "docker-bridge-network.html_chunk_8"
+      ],
+      "sparse_hits": [
+        "docker-bridge-network.html_chunk_20",
+        "docker-bridge-network.html_chunk_25",
+        "docker-bridge-network.html_chunk_19",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_10"
+      ],
+      "hybrid_hits": [
+        "docker-bridge-network.html_chunk_25",
+        "docker-bridge-network.html_chunk_11",
+        "docker-bridge-network.html_chunk_8",
+        "docker-bridge-network.html_chunk_20",
+        "docker-bridge-network.html_chunk_24"
+      ],
+      "reranked_hits": [
+        "docker-bridge-network.html_chunk_11",
+        "docker-bridge-network.html_chunk_25",
+        "docker-bridge-network.html_chunk_24",
+        "docker-bridge-network.html_chunk_10",
+        "docker-bridge-network.html_chunk_20"
+      ],
+      "relevant_chunks": [
+        "docker-bridge-network.html_chunk_10",
+        "docker-bridge-network.html_chunk_23",
+        "docker-networking.html_chunk_18"
+      ],
+      "dense_mrr": 0.3333,
+      "sparse_mrr": 0.2,
+      "hybrid_mrr": 0.125,
+      "reranked_mrr": 0.25,
+      "aspect_coverage": 0.5,
+      "refusal_correct": true,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 9293.3,
+      "error": null
+    },
+    {
+      "query_id": "negative_ood_01",
+      "query": "How does AWS Lambda provisioned concurrency reduce cold start latency in serverless Python functions?",
+      "category": "negative_ood",
+      "dense_hits": [
+        "kubernetes-pods.html_chunk_6",
+        "kubernetes-workloads.html_chunk_6",
+        "kubernetes-deployments.html_chunk_6",
+        "kubernetes-deployments.html_chunk_116",
+        "kubernetes-workloads.html_chunk_21"
+      ],
+      "sparse_hits": [
+        "docker-bridge-network.html_chunk_3",
+        "docker-networking.html_chunk_3",
+        "docker-bridge-network.html_chunk_5",
+        "docker-networking.html_chunk_5",
+        "kubernetes-pods.html_chunk_19"
+      ],
+      "hybrid_hits": [
+        "kubernetes-pods.html_chunk_19",
+        "docker-bridge-network.html_chunk_3",
+        "kubernetes-workloads.html_chunk_6",
+        "docker-networking.html_chunk_3",
+        "kubernetes-deployments.html_chunk_6"
+      ],
+      "reranked_hits": [
+        "kubernetes-pods.html_chunk_19",
+        "docker-bridge-network.html_chunk_3",
+        "docker-networking.html_chunk_3",
+        "kubernetes-deployments.html_chunk_3",
+        "kubernetes-pods.html_chunk_3"
+      ],
+      "relevant_chunks": [],
+      "dense_mrr": 0.0,
+      "sparse_mrr": 0.0,
+      "hybrid_mrr": 0.0,
+      "reranked_mrr": 0.0,
+      "aspect_coverage": 1.0,
+      "refusal_correct": true,
+      "crag_grade": "BAD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 2572.1,
+      "error": null
+    },
+    {
+      "query_id": "negative_ood_02",
+      "query": "How does Terraform state locking work with DynamoDB and Amazon S3 remote backends?",
+      "category": "negative_ood",
+      "dense_hits": [
+        "kubernetes-workloads.html_chunk_34",
+        "kubernetes-pods.html_chunk_42",
+        "kubernetes-deployments.html_chunk_58",
+        "kubernetes-deployments.html_chunk_116",
+        "kubernetes-deployments.html_chunk_7"
+      ],
+      "sparse_hits": [
+        "docker-bridge-network.html_chunk_3",
+        "docker-networking.html_chunk_3",
+        "docker-bridge-network.html_chunk_4",
+        "docker-networking.html_chunk_4",
+        "kubernetes-pods.html_chunk_69"
+      ],
+      "hybrid_hits": [
+        "kubernetes-workloads.html_chunk_11",
+        "docker-bridge-network.html_chunk_3",
+        "kubernetes-deployments.html_chunk_58",
+        "docker-networking.html_chunk_3",
+        "kubernetes-pods.html_chunk_42"
+      ],
+      "reranked_hits": [
+        "docker-bridge-network.html_chunk_4",
+        "docker-networking.html_chunk_4",
+        "docker-bridge-network.html_chunk_6",
+        "docker-networking.html_chunk_6",
+        "docker-bridge-network.html_chunk_3"
+      ],
+      "relevant_chunks": [],
+      "dense_mrr": 0.0,
+      "sparse_mrr": 0.0,
+      "hybrid_mrr": 0.0,
+      "reranked_mrr": 0.0,
+      "aspect_coverage": 1.0,
+      "refusal_correct": false,
+      "crag_grade": "GOOD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 7255.06,
+      "error": null
+    },
+    {
+      "query_id": "negative_ood_03",
+      "query": "What are the configuration parameters for Kafka consumer group rebalance protocol in Apache Kafka 3.x?",
+      "category": "negative_ood",
+      "dense_hits": [
+        "kubernetes-workloads.html_chunk_23",
+        "kubernetes-deployments.html_chunk_47",
+        "kubernetes-pods.html_chunk_31",
+        "kubernetes-workloads.html_chunk_34",
+        "kubernetes-pods.html_chunk_42"
+      ],
+      "sparse_hits": [
+        "kubernetes-pods.html_chunk_53",
+        "kubernetes-deployments.html_chunk_32",
+        "kubernetes-deployments.html_chunk_110",
+        "kubernetes-deployments.html_chunk_111",
+        "kubernetes-pods.html_chunk_52"
+      ],
+      "hybrid_hits": [
+        "kubernetes-deployments.html_chunk_111",
+        "kubernetes-pods.html_chunk_34",
+        "kubernetes-deployments.html_chunk_50",
+        "kubernetes-workloads.html_chunk_26",
+        "kubernetes-pods.html_chunk_3"
+      ],
+      "reranked_hits": [
+        "kubernetes-deployments.html_chunk_3",
+        "kubernetes-pods.html_chunk_3",
+        "kubernetes-workloads.html_chunk_3",
+        "kubernetes-deployments.html_chunk_32",
+        "kubernetes-deployments.html_chunk_4"
+      ],
+      "relevant_chunks": [],
+      "dense_mrr": 0.0,
+      "sparse_mrr": 0.0,
+      "hybrid_mrr": 0.0,
+      "reranked_mrr": 0.0,
+      "aspect_coverage": 1.0,
+      "refusal_correct": true,
+      "crag_grade": "BAD",
+      "is_corrected": false,
+      "hops_executed": 1,
+      "latency_ms": 2550.75,
+      "error": null
+    }
+  ],
+  "failures": []
+}

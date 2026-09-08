@@ -1,0 +1,192 @@
+{
+  "timestamp": "2026-09-06T18:40:35.831029+00:00",
+  "framework": "ragas-compatible-eval",
+  "metrics_summary": {
+    "context_recall": 0.8333,
+    "context_precision": 0.3333,
+    "faithfulness_proxy": 0.8333,
+    "total_queries": 18
+  },
+  "query_results": [
+    {
+      "query_id": "direct_factual_01",
+      "query": "What is the difference between user-defined bridge networks and the default bridge network in Docker?",
+      "category": "direct_factual",
+      "context_recall": 1.0,
+      "context_precision": 0.2,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "direct_factual_02",
+      "query": "What is the default bridge interface name and driver option in Docker?",
+      "category": "direct_factual",
+      "context_recall": 1.0,
+      "context_precision": 0.2,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "direct_factual_03",
+      "query": "What is the role of a ReplicaSet in a Kubernetes Deployment?",
+      "category": "direct_factual",
+      "context_recall": 1.0,
+      "context_precision": 0.4,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "keyword_heavy_01",
+      "query": "Docker bridge com.docker.network.bridge.enable_ip_masquerade --ip-masq",
+      "category": "keyword_heavy",
+      "context_recall": 1.0,
+      "context_precision": 0.2,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "keyword_heavy_02",
+      "query": "Kubernetes Deployment spec.strategy.rollingUpdate.maxSurge maxUnavailable",
+      "category": "keyword_heavy",
+      "context_recall": 0.0,
+      "context_precision": 0.0,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "keyword_heavy_03",
+      "query": "Docker network driver macvlan overlay host none bridge",
+      "category": "keyword_heavy",
+      "context_recall": 1.0,
+      "context_precision": 0.4,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "semantic_paraphrased_01",
+      "query": "How can containers on the same physical host talk to each other without exposing ports to the outside world?",
+      "category": "semantic_paraphrased",
+      "context_recall": 1.0,
+      "context_precision": 0.2,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "semantic_paraphrased_02",
+      "query": "How does Kubernetes guarantee that exactly one instance of a pod runs across every single machine in a cluster?",
+      "category": "semantic_paraphrased",
+      "context_recall": 1.0,
+      "context_precision": 0.2,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "semantic_paraphrased_03",
+      "query": "What mechanism allows non-disruptive rollouts of new container image versions in Kubernetes?",
+      "category": "semantic_paraphrased",
+      "context_recall": 0.0,
+      "context_precision": 0.0,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "multi_concept_01",
+      "query": "How do user-defined bridge networks handle DNS resolution compared to legacy links on the default bridge?",
+      "category": "multi_concept",
+      "context_recall": 1.0,
+      "context_precision": 0.2,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "multi_concept_02",
+      "query": "What are the primary differences between Kubernetes StatefulSets and stateless Deployments regarding storage and network identity?",
+      "category": "multi_concept",
+      "context_recall": 1.0,
+      "context_precision": 0.2,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "multi_concept_03",
+      "query": "When should you use a Macvlan or Overlay network driver instead of a standard Bridge network in Docker?",
+      "category": "multi_concept",
+      "context_recall": 1.0,
+      "context_precision": 0.4,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "multi_chunk_01",
+      "query": "How does a Kubernetes Deployment orchestrate Pod lifecycle and container restarts via its template specification?",
+      "category": "multi_chunk",
+      "context_recall": 0.0,
+      "context_precision": 0.0,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "multi_chunk_02",
+      "query": "How are batch Jobs and CronJobs distinguished from continuously running daemon workloads in Kubernetes Workload Management?",
+      "category": "multi_chunk",
+      "context_recall": 1.0,
+      "context_precision": 0.2,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "multi_chunk_03",
+      "query": "What options exist for binding container ports and configuring iptables rules on Docker host networks and bridge networks?",
+      "category": "multi_chunk",
+      "context_recall": 1.0,
+      "context_precision": 0.2,
+      "faithfulness_proxy": 0.8,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "negative_ood_01",
+      "query": "How does AWS Lambda provisioned concurrency reduce cold start latency in serverless Python functions?",
+      "category": "negative_ood",
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "faithfulness_proxy": 1.0,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "negative_ood_02",
+      "query": "How does Terraform state locking work with DynamoDB and Amazon S3 remote backends?",
+      "category": "negative_ood",
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "faithfulness_proxy": 1.0,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    },
+    {
+      "query_id": "negative_ood_03",
+      "query": "What are the configuration parameters for Kafka consumer group rebalance protocol in Apache Kafka 3.x?",
+      "category": "negative_ood",
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "faithfulness_proxy": 1.0,
+      "refusal_correct": true,
+      "latency_ms": 0.0
+    }
+  ]
+}
