@@ -14,14 +14,9 @@ This directory contains visual records of the running **Hybrid-Agentic-RAG** Str
 
 ---
 
-## Capturing / Regenerating Screenshots
+## Capturing / Updating Screenshots
 
-To regenerate these screenshots automatically from the live application, run:
-```powershell
-python scripts/capture_screenshots.py
-```
-
-### Manual Capture Procedure:
+### Capture Procedure:
 1. Ensure the stack is running:
    ```powershell
    docker compose up -d

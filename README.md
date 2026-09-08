@@ -38,7 +38,7 @@ An offline-first local Retrieval-Augmented Generation (RAG) system combining str
   - [Root Entrypoint](#root-entrypoint)
   - [Interactive Jupyter Notebooks](#interactive-jupyter-notebooks)
   - [Viva & Demonstration Q&A Guide](#viva--demonstration-qa-guide)
-  - [Structural Compatibility Wrappers](#structural-compatibility-wrappers)
+  - [Intentional Architectural Mapping](#intentional-architectural-mapping)
 - [REST API Specification](#rest-api-specification)
 - [Latency Optimization & Performance Benchmarks](#latency-optimization--performance-benchmarks)
 - [Repository Structure](#repository-structure)
@@ -448,15 +448,9 @@ Three educational, fully reproducible notebooks demonstrating each pipeline phas
 - **File:** [`docs/demonstration_qna.md`](docs/demonstration_qna.md)  
   Comprehensive preparation guide providing concise oral responses for all **24 Final Demonstration Questions** from Section 28 of the Capstone Guidelines (covering chunking trade-offs, vector DB selection, hybrid search intuition, CRAG mechanics, and enterprise scaling).
 
-### 4. Structural Compatibility Wrappers (`src/`)
-For evaluators verifying exact filenames specified in Section 22 without disturbing the underlying production subpackage architecture, non-breaking re-export wrappers are provided at:
-- `src/document_loader.py` $\rightarrow$ `src.ingestion.loaders`
-- `src/chunking.py` $\rightarrow$ `src.ingestion.chunker`
-- `src/embeddings.py` $\rightarrow$ `src.retrieval.dense`
-- `src/retriever.py` $\rightarrow$ `src.retrieval.hybrid`
-- `src/rag_pipeline.py` $\rightarrow$ `src.agent.agent`
-- `src/evaluation.py` $\rightarrow$ `src.evaluation.runner`
-*(Note: Raw document collection is stored under `data/raw/` to prevent duplicate corpus copies on disk).*
+### 4. Intentional Architectural Mapping
+- **Modular Production Packages (`src/`):** The codebase uses a modular subpackage architecture (`src/ingestion/`, `src/retrieval/`, `src/agent/`, `src/correction/`, `src/evaluation/`) rather than flat scripts, ensuring clean separation of concerns, strict testing isolation, and production readiness.
+- **Document Organization (`data/raw/`):** The primary technical document corpus is maintained in `data/raw/` (alongside `processed/`, `evaluation/`, and `cache/`), fulfilling the Capstone `data/documents/` role while avoiding duplicate copies on disk.
 
 ## REST API Specification
 
@@ -639,16 +633,9 @@ hybrid-agentic-rag/
 ├── scripts/
 │   ├── ingest.py                  # Document ingestion and chunking CLI
 │   ├── build_index.py             # Dense (Qdrant) and Sparse (BM25) indexing CLI
-│   ├── capture_screenshots.py     # Automated browser screenshot capture utility
 │   ├── run_evaluation.py          # Quantitative evaluation runner (fast/full)
 │   └── verify_final_capstone.py   # E2E Capstone verification harness (7 steps)
 ├── src/
-│   ├── document_loader.py         # [Compatibility Wrapper] re-exports src.ingestion.loaders
-│   ├── chunking.py                # [Compatibility Wrapper] re-exports src.ingestion.chunker
-│   ├── embeddings.py              # [Compatibility Wrapper] re-exports src.retrieval.dense
-│   ├── retriever.py               # [Compatibility Wrapper] re-exports src.retrieval.hybrid
-│   ├── rag_pipeline.py            # [Compatibility Wrapper] re-exports src.agent.agent
-│   ├── evaluation.py              # [Compatibility Wrapper] re-exports src.evaluation.runner
 │   ├── agent/                     # LocalQwenAgent, prompts, tools, and Ollama client
 │   ├── api/                       # FastAPI app, routes, schemas, and service layer
 │   ├── config.py                  # Centralized application settings (pydantic/dataclass)
